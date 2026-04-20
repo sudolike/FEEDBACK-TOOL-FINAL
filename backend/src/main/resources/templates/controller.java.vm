@@ -1,0 +1,71 @@
+package ${package.Controller};
+
+
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import org.springframework.web.bind.annotation.*;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.cen.common.Result;
+import javax.annotation.Resource;
+import java.util.List;
+
+import $!{package.Service}.$!{table.serviceName};
+import ${package.Entity}.${entity};
+
+import org.springframework.web.bind.annotation.RestController;
+#if(${superControllerClassPackage})
+import ${superControllerClassPackage};
+#end
+
+/**
+ * <p>
+ * $!{table.comment} 前端控制器
+ * </p>
+ *
+ * @author ${author}
+ * @since ${date}
+ */
+@RestController
+@RequestMapping("#if(${package.ModuleName})/${package.ModuleName}#end/#if(${controllerMappingHyphenStyle})${controllerMappingHyphen}#else${table.entityPath}#end")
+#if(${kotlin})
+class ${table.controllerName}#if(${superControllerClass}) : ${superControllerClass}()#end
+
+#else
+#if(${superControllerClass})
+public class ${table.controllerName} extends ${superControllerClass} {
+#else
+public class ${table.controllerName} {
+#end
+
+    @Resource
+    private ${table.serviceName} ${table.entityPath}Service;
+    //新增或修改
+    @PostMapping("/save")
+    public Result save(@RequestBody ${entity} ${table.entityPath}) {
+        return Result.success(${table.entityPath}Service.saveOrUpdate(${table.entityPath}));
+    }
+    //删除
+    @PostMapping("/delete")
+    public Result delete(@RequestBody ${entity} ${table.entityPath}){ //@RequestBody把前台的json对象转成java的对象
+        return Result.success(${table.entityPath}Service.removeById(${table.entityPath}.getId()));
+    }
+    //批量删除
+    @PostMapping("/del/batch")
+    public Result Batch(@RequestBody List<Integer> ids){
+        return Result.success(${table.entityPath}Service.removeBatchByIds(ids));
+    }
+    //根据id获取
+    @GetMapping("/getById")
+    public Result findOne(@PathVariable ${entity} ${table.entityPath}) {
+        return Result.success(${table.entityPath}Service.getById(${table.entityPath}.getId()));
+    }
+    //分页查询
+    @GetMapping("/page")
+    public Result findPage(@RequestParam(defaultValue = "1") Integer pageNum,
+                           @RequestParam(defaultValue = "10") Integer pageSize) {
+        QueryWrapper<${entity}> queryWrapper = new QueryWrapper<>();
+        queryWrapper.orderByDesc("id"); //设置id倒序
+        return Result.success(${table.entityPath}Service.page(new Page<>(pageNum, pageSize)));
+    }
+}
+
+#end

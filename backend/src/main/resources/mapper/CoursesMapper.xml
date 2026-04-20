@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cen.mapper.CoursesMapper">
+    <select id="getCoursesByStudentId" resultType="com.cen.entity.Courses">
+        SELECT c.*
+        FROM sys_courses c
+        INNER JOIN sys_course_students cs ON c.id = cs.course_id
+        WHERE cs.student_id = #{studentId}
+        ORDER BY c.id DESC
+    </select>
+</mapper>
