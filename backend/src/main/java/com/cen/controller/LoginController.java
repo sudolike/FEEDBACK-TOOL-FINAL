@@ -51,13 +51,21 @@ public class LoginController {
         }
         return Result.success(userService.login(userDTO));
     }
-    /*注册接口*/
+    /*
+     * 公共注册接口：
+     *  - 仅允许 student / teacher 注册
+     *  - 不接受任何 admin 注册请求（即使前端绕过校验，后端 service 层也会拒绝）
+     */
     @PostMapping("/register")
     public Result register(@RequestBody UserDTO userDTO) {
         String username = userDTO.getUsername();
         String password = userDTO.getPassword();
-        if(StrUtil.isBlank(username) || StrUtil.isBlank(password)){
-            return Result.error(Constants.CODE_400,"参数错误");
+        if (StrUtil.isBlank(username) || StrUtil.isBlank(password)) {
+            return Result.error(Constants.CODE_400, "参数错误");
+        }
+        if (userDTO.getRole() != null && "admin".equalsIgnoreCase(userDTO.getRole().trim())) {
+            return Result.error(Constants.CODE_403,
+                    "管理员账号不开放注册，请使用学生或教师身份");
         }
         return Result.success(userService.register(userDTO));
     }

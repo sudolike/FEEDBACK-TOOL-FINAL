@@ -14,7 +14,15 @@ public class InterceptorConfig implements WebMvcConfigurer {
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(jwtInterceptor)
-                .addPathPatterns("/**")//拦截的所有请求，通过判断token是否合法来觉得是否需要登录
-                .excludePathPatterns("/login","/register","/captcha","/file/**","/webuser/list", "/ai/aliTyqw");//排除不拦截的请求
+                .addPathPatterns("/**")
+                .excludePathPatterns(
+                        "/login", "/register", "/captcha",
+                        "/file/**",
+                        "/webuser/list",
+                        "/ai/aliTyqw",
+                        "/calendar/**",
+                        "/error",
+                        "/actuator/**"
+                );
     }
 }

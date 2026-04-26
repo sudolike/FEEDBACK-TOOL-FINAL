@@ -1,16 +1,26 @@
 server:
-  port: 9091
+  port: ${SERVER_PORT:9091}
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
 spring:
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 500MB
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/feedback_1?serverTimezone=GMT%2b8&useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true
-    username: root
-    password: 123456
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:feedback_1}?serverTimezone=GMT%2b8&useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:123456}
   mail:
-    host: smtp.qq.com
-    port: 587
-    username: 2656347297@qq.com
-    password: bhaarayajzkoeaef  # 需要在QQ邮箱设置中获取授权码
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -19,10 +29,10 @@ spring:
             enable: true
             required: true
   redis:
-    host: localhost
-    port: 6379
-    password:
-    database: 0
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DB:0}
     timeout: 10000
     lettuce:
       pool:
@@ -33,14 +43,37 @@ spring:
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
-#  configuration:
-#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 mybatis-plus:
   configuration:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 files:
   upload:
-    path: D:\项目\Feedback-tool\wms\files/
+    path: ${FILES_UPLOAD_PATH:./files/}
 
-ai-api-key: "sk-efffabfede29422f86ac2f9c82771a78"
+# 通义千问 API Key（生产部署请通过环境变量 AI_API_KEY 注入）
+ai-api-key: "${AI_API_KEY:sk-efffabfede29422f86ac2f9c82771a78}"
+ai:
+  model: ${AI_MODEL:qwen-plus}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        enabled: true
+      # 自定义只看核心组件的健康组：Docker healthcheck 用 /actuator/health/live
+      group:
+        live:
+          include: ping,db,redis,diskSpace
+          show-details: never
+  health:
+    # 邮箱未配置真实账号时，去掉 mail 健康指示器，避免拖垮 /actuator/health
+    mail:
+      enabled: false
+    ldap:
+      enabled: false

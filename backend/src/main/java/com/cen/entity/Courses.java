@@ -10,12 +10,12 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * <p>
- * 
- * </p>
+ * 课程实体（含管理员审批字段）。
  *
- * @author wyt
- * @since 2025-03-14
+ * status 取值：
+ *   - pending  教师刚提交，等待管理员审批
+ *   - approved 已通过，对学生端可见
+ *   - rejected 已驳回，仅教师本人可见，可修改后重新提交
  */
 @Data
 @NoArgsConstructor
@@ -23,32 +23,46 @@ import java.time.LocalDateTime;
 @TableName("sys_courses")
 public class Courses implements Serializable {
 
+    public static final String STATUS_PENDING  = "pending";
+    public static final String STATUS_APPROVED = "approved";
+    public static final String STATUS_REJECTED = "rejected";
+
     private static final long serialVersionUID = 1L;
 
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
-    // 课程名称
     private String name;
 
-    // 课程代码
     private String code;
 
-    // 授课教师ID
     private Long teacherId;
 
-    // 学年
+    private String description;
+
+    private String coverUrl;
+
     private String academicYear;
 
-    // 学期
     private Integer semester;
 
-    // 课程时间
     private String courseTime;
 
-    // 创建时间
+    private String location;
+
+    /** 审批状态：pending/approved/rejected */
+    private String status;
+
+    /** 驳回原因（仅 rejected 时有值） */
+    private String rejectReason;
+
+    /** 审批人（管理员）ID */
+    private Long reviewedBy;
+
+    /** 审批时间 */
+    private LocalDateTime reviewedAt;
+
     private LocalDateTime createdAt;
 
-    // 更新时间
     private LocalDateTime updatedAt;
 }

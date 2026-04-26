@@ -6,9 +6,11 @@ import com.cen.mapper.QuestionnaireResponsesMapper;
 import com.cen.service.IQuestionnaireResponsesService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
+import com.cen.controller.dto.AnonymousResponseDTO;
 import com.cen.controller.dto.QuestionnaireResponseDetailDTO;
 import com.cen.entity.User;
 import com.cen.mapper.UserMapper;
+import com.cen.utils.AnonymizeUtils;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.cen.controller.dto.QuestionnaireResponseSummaryDTO;
 import com.cen.mapper.QuestionnairesMapper;
@@ -111,5 +113,22 @@ public class QuestionnaireResponsesServiceImpl extends ServiceImpl<Questionnaire
         summary.setAnswers(allAnswers);
 
         return summary;
+    }
+
+    @Override
+    public List<AnonymousResponseDTO> getQuestionnaireFillinAnonymous(Long courseId, Long questionnaireId) {
+        QueryWrapper<QuestionnaireResponses> qw = new QueryWrapper<>();
+        qw.eq("course_id", courseId)
+          .eq("questionnaire_id", questionnaireId)
+          .orderByDesc("submitted_at");
+        List<QuestionnaireResponses> list = this.list(qw);
+        return list.stream().map(r -> {
+            AnonymousResponseDTO dto = new AnonymousResponseDTO();
+            dto.setId(r.getId());
+            dto.setAnswers(r.getAnswers());
+            dto.setSubmittedAt(r.getSubmittedAt());
+            dto.setAnonymousId(AnonymizeUtils.anonymize(r.getStudentId(), questionnaireId));
+            return dto;
+        }).collect(Collectors.toList());
     }
 }

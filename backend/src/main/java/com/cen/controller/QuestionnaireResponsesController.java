@@ -90,12 +90,20 @@ public class QuestionnaireResponsesController {
         queryWrapper.orderByDesc("id"); //设置id倒序
         return Result.success(questionnaireResponsesService.page(new Page<>(pageNum, pageSize)));
     }
-    // 查询课程问卷的填写情况列表
+    // 查询课程问卷的填写情况列表（含学生身份，仅管理员/系统内部调用）
     @GetMapping("/FillinDetails")
     public Result getCourseQuestionnaireResponses(
             @RequestParam Long courseId,
             @RequestParam Long questionnaireId) {
         return Result.success(questionnaireResponsesService.getQuestionnaireFillinDetails(courseId, questionnaireId));
+    }
+
+    // 教师端拉取问卷答案：匿名化版本（默认接口，前端展示用）
+    @GetMapping("/FillinAnonymous")
+    public Result getCourseQuestionnaireResponsesAnonymous(
+            @RequestParam Long courseId,
+            @RequestParam Long questionnaireId) {
+        return Result.success(questionnaireResponsesService.getQuestionnaireFillinAnonymous(courseId, questionnaireId));
     }
 
     /**

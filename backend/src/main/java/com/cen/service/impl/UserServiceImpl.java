@@ -68,25 +68,48 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     //用户新增的时候判断一下是否存在
     /**
      * 用户注册
-     * 1. 检查用户名是否已存在
-     * 2. 创建新用户
+     *  1. 严禁 admin 角色通过开放接口注册（管理员账号仅由系统内置）
+     *  2. 强制规范化角色字段，缺省按学生处理
+     *  3. 检查用户名是否已存在
+     *  4. 校验用户名/密码长度与基本规范
+     *  5. 创建新用户
      */
     @Override
     public Object register(UserDTO userDTO) {
-        // 检查用户名是否已存在
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("username",userDTO.getUsername());
-        User one = getOne(queryWrapper);
-        if (one==null){
-            // 创建新用户
-            one = new User();
-            BeanUtil.copyProperties(userDTO,one,true);
-            one.setRole(userDTO.getRole());
-            one.setRoleId(userDTO.getRoleId());
-            save(one);
-        }else{
-            throw new ServiceException(Constants.CODE_500,"用户已存在");
+        String role = userDTO.getRole();
+        if (role == null || role.trim().isEmpty()) {
+            role = "student";
         }
+        role = role.trim().toLowerCase();
+        if (!"student".equals(role) && !"teacher".equals(role)) {
+            throw new ServiceException(Constants.CODE_400,
+                    "管理员账号不开放注册，请使用学生或教师身份");
+        }
+        if (userDTO.getUsername() == null || userDTO.getUsername().trim().length() < 3) {
+            throw new ServiceException(Constants.CODE_400, "用户名至少 3 个字符");
+        }
+        if (userDTO.getPassword() == null || userDTO.getPassword().length() < 4) {
+            throw new ServiceException(Constants.CODE_400, "密码至少 4 个字符");
+        }
+        String trimmedUsername = userDTO.getUsername().trim();
+        if (trimmedUsername.toLowerCase().startsWith("admin")) {
+            throw new ServiceException(Constants.CODE_400,
+                    "用户名不能以 admin 开头，该前缀已被系统保留");
+        }
+
+        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("username", trimmedUsername);
+        User one = getOne(queryWrapper);
+        if (one != null) {
+            throw new ServiceException(Constants.CODE_500, "用户已存在");
+        }
+        one = new User();
+        BeanUtil.copyProperties(userDTO, one, true);
+        one.setUsername(trimmedUsername);
+        one.setRole(role);
+        one.setRoleId("teacher".equals(role) ? 3 : 2);
+        one.setStatus(1);
+        save(one);
         return one;
     }
 

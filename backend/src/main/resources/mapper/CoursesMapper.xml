@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.cen.mapper.CoursesMapper">
+    <!--
+        学生选课列表：仅返回已通过审批 (status='approved') 的课程，
+        避免学生看到尚未上线的课程。
+    -->
     <select id="getCoursesByStudentId" resultType="com.cen.entity.Courses">
         SELECT c.*
         FROM sys_courses c
         INNER JOIN sys_course_students cs ON c.id = cs.course_id
         WHERE cs.student_id = #{studentId}
+          AND (c.status IS NULL OR c.status = 'approved')
         ORDER BY c.id DESC
     </select>
 </mapper>
