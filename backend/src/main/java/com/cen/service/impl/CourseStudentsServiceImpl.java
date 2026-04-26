@@ -30,23 +30,30 @@ public class CourseStudentsServiceImpl extends ServiceImpl<CourseStudentsMapper,
     @Override
     @Transactional
     public boolean bindStudents(Long courseId, String studentIds) {
-        // 1. 如果学生ID为空，直接返回
         if (StringUtils.isBlank(studentIds)) {
             return true;
         }
-        
-        // 2. 将学生ID字符串转换为List
+
         List<Long> sIds = Arrays.stream(studentIds.split(","))
                 .map(String::trim)
                 .map(Long::parseLong)
                 .collect(Collectors.toList());
-                
-        // 3. 批量创建新的关联关系
+
+        // 兼容老接口：直接绑定 = 已批准的选课关系（来自管理员/教师后台直接关联）
+        LocalDateTime now = LocalDateTime.now();
         List<CourseStudents> relations = sIds.stream()
-                .map(sId -> new CourseStudents(null, courseId, sId, LocalDateTime.now()))
+                .map(sId -> {
+                    CourseStudents cs = new CourseStudents();
+                    cs.setCourseId(courseId);
+                    cs.setStudentId(sId);
+                    cs.setStatus(CourseStudents.STATUS_APPROVED);
+                    cs.setSource(CourseStudents.SOURCE_TEACHER_INVITE);
+                    cs.setReviewedAt(now);
+                    cs.setCreatedAt(now);
+                    return cs;
+                })
                 .collect(Collectors.toList());
-                
-        // 4. 批量保存
+
         return this.saveBatch(relations);
     }
 

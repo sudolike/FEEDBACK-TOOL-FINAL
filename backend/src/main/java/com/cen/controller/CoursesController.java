@@ -83,6 +83,24 @@ public class CoursesController {
         return Result.success(coursesService.getCoursesByStudentId(studentId));
     }
 
+    /**
+     * 学生发现课程：分页 + 关键词（课程名 / 课程编号）。
+     * 仅返回 status=approved，可选过滤掉已加入或已申请的课程（默认会保留以便前端给出对应状态徽章）。
+     */
+    @GetMapping("/discover")
+    public Result discover(@RequestParam(defaultValue = "1") Integer pageNum,
+                           @RequestParam(defaultValue = "10") Integer pageSize,
+                           @RequestParam(defaultValue = "") String keyword) {
+        QueryWrapper<Courses> qw = new QueryWrapper<>();
+        qw.and(w -> w.eq("status", Courses.STATUS_APPROVED).or().isNull("status"));
+        if (Strings.isNotEmpty(keyword)) {
+            String k = keyword.trim();
+            qw.and(w -> w.like("name", k).or().like("code", k));
+        }
+        qw.orderByDesc("id");
+        return Result.success(coursesService.page(new Page<>(pageNum, pageSize), qw));
+    }
+
     /* ============================================================
      * 教师侧
      * ============================================================ */

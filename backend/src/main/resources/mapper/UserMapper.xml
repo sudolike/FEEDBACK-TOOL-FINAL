@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.cen.mapper.UserMapper">
+    <!-- 课程已加入的学生（仅 approved 关系） -->
     <select id="getStudentsByCourseId" resultType="com.cen.entity.User">
         SELECT u.*
         FROM sys_user u
         INNER JOIN sys_course_students cs ON u.id = cs.student_id
         WHERE cs.course_id = #{courseId}
+          AND (cs.status IS NULL OR cs.status = 'approved')
         ORDER BY u.id DESC
     </select>
 </mapper>

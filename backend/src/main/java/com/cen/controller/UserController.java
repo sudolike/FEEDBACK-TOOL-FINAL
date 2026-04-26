@@ -64,6 +64,59 @@ public class UserController {
     public Result editPow(@RequestBody User user) {
         return Result.success(userService.editPow(user));
     }
+
+    /**
+     * 当前登录用户修改密码：
+     *  body: { oldPassword, newPassword }
+     *  newPassword 至少 6 位
+     */
+    @PostMapping("/me/password")
+    public Result changeMyPassword(@RequestBody java.util.Map<String, String> body) {
+        Long me = com.cen.utils.AuthContext.requireUserId();
+        String oldPwd = body == null ? null : body.get("oldPassword");
+        String newPwd = body == null ? null : body.get("newPassword");
+        if (newPwd == null || newPwd.trim().length() < 6) {
+            return Result.error(400, "新密码至少 6 位");
+        }
+        User u = userService.getById(me);
+        if (u == null) return Result.error(404, "用户不存在");
+        if (oldPwd == null || !oldPwd.equals(u.getPassword())) {
+            return Result.error(400, "旧密码不正确");
+        }
+        if (newPwd.equals(oldPwd)) {
+            return Result.error(400, "新密码不能与旧密码相同");
+        }
+        u.setPassword(newPwd);
+        userService.updateById(u);
+        return Result.success();
+    }
+
+    /**
+     * 当前登录用户修改个人资料：邮箱 / 昵称 / 头像
+     *  body: { email?, nickname?, avatarUrl? }
+     */
+    @PostMapping("/me/profile")
+    public Result updateMyProfile(@RequestBody User patch) {
+        Long me = com.cen.utils.AuthContext.requireUserId();
+        User u = userService.getById(me);
+        if (u == null) return Result.error(404, "用户不存在");
+        if (patch.getEmail() != null) u.setEmail(patch.getEmail().trim());
+        if (patch.getNickname() != null) u.setNickname(patch.getNickname().trim());
+        if (patch.getAvatarUrl() != null) u.setAvatarUrl(patch.getAvatarUrl().trim());
+        userService.updateById(u);
+        u.setPassword(null);
+        return Result.success(u);
+    }
+
+    /** 当前用户基本信息（不返回密码） */
+    @GetMapping("/me")
+    public Result me() {
+        Long me = com.cen.utils.AuthContext.requireUserId();
+        User u = userService.getById(me);
+        if (u == null) return Result.error(404, "用户不存在");
+        u.setPassword(null);
+        return Result.success(u);
+    }
     //上传头像
     @PostMapping("/upload/avatar")
     public Result uploadAvatar(@RequestBody User user) throws IOException {

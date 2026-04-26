@@ -41,6 +41,20 @@ public class DatabaseInitializer implements CommandLineRunner {
                 "reviewed_at");
         safeExec("CREATE INDEX idx_status ON sys_courses(status)", "idx_status");
 
+        // ---- 选课关系表（sys_course_students）扩展字段：申请/邀请工作流 ----
+        safeExec("ALTER TABLE sys_course_students ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'approved'",
+                "course_students.status");
+        safeExec("ALTER TABLE sys_course_students ADD COLUMN source VARCHAR(20) NOT NULL DEFAULT 'student_apply'",
+                "course_students.source");
+        safeExec("ALTER TABLE sys_course_students ADD COLUMN apply_message VARCHAR(512) DEFAULT NULL",
+                "course_students.apply_message");
+        safeExec("ALTER TABLE sys_course_students ADD COLUMN reject_reason VARCHAR(512) DEFAULT NULL",
+                "course_students.reject_reason");
+        safeExec("ALTER TABLE sys_course_students ADD COLUMN reviewed_at DATETIME DEFAULT NULL",
+                "course_students.reviewed_at");
+        safeExec("CREATE INDEX idx_cs_status ON sys_course_students(status)",
+                "idx_cs_status");
+
         try {
             int filled = jdbcTemplate.update(
                     "UPDATE sys_courses SET status='approved' " +
@@ -50,6 +64,18 @@ public class DatabaseInitializer implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.warn("[DB-Init] backfill course status skipped: {}", e.getMessage());
+        }
+
+        // 历史选课关系视为已批准
+        try {
+            int filledCs = jdbcTemplate.update(
+                    "UPDATE sys_course_students SET status='approved' " +
+                            "WHERE status IS NULL OR status=''");
+            if (filledCs > 0) {
+                log.info("[DB-Init] backfill {} legacy enrollments to status=approved", filledCs);
+            }
+        } catch (Exception e) {
+            log.warn("[DB-Init] backfill enrollment status skipped: {}", e.getMessage());
         }
 
         try {

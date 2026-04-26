@@ -75,6 +75,14 @@ public class JwtInterceptor implements HandlerInterceptor {
                 && !("teacher".equals(user.getRole()) || "admin".equals(user.getRole()))) {
             throw new ServiceException(Constants.CODE_403, "需要教师权限");
         }
+        if (uri.startsWith("/enrollments/student/")
+                && !("student".equals(user.getRole()) || "admin".equals(user.getRole()))) {
+            throw new ServiceException(Constants.CODE_403, "需要学生权限");
+        }
+        if (uri.startsWith("/enrollments/teacher/")
+                && !("teacher".equals(user.getRole()) || "admin".equals(user.getRole()))) {
+            throw new ServiceException(Constants.CODE_403, "需要教师权限");
+        }
         return true;
     }
 

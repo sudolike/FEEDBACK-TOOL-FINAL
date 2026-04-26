@@ -78,11 +78,17 @@ CREATE TABLE `sys_course_students` (
   `id` bigint NOT NULL AUTO_INCREMENT,
   `course_id` bigint NOT NULL,
   `student_id` bigint NOT NULL,
+  `status` varchar(16) NOT NULL DEFAULT 'approved' COMMENT 'pending/approved/rejected',
+  `source` varchar(20) NOT NULL DEFAULT 'student_apply' COMMENT 'student_apply/teacher_invite',
+  `apply_message` varchar(512) DEFAULT NULL COMMENT '学生申请留言',
+  `reject_reason` varchar(512) DEFAULT NULL COMMENT '驳回原因',
+  `reviewed_at` datetime DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_course_student` (`course_id`,`student_id`),
-  KEY `idx_student` (`student_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='选课表';
+  KEY `idx_student` (`student_id`),
+  KEY `idx_cs_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='选课/申请/邀请关系表';
 
 -- ----------------------------
 -- 问卷表

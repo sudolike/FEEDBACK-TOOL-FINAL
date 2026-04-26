@@ -12,13 +12,18 @@
 |---|---|---|---|
 | 注册入口 | ✅ 公开（默认 student） | ✅ 公开（teacher） | ❌ **不开放注册** |
 | 登录入口 | ✅ | ✅ | ✅（角色切换器选「管理员」） |
-| 课程查看 | 仅可见**已审批通过**的课程 | 自己提交的全部课程（含 pending/rejected） | 全平台课程，按状态筛选 |
+| 课程查看 | 仅可见**已加入（approved）**的课程 | 自己提交的全部课程（含 pending/rejected） | 全平台课程，按状态筛选 |
+| 课程发现/搜索 | ✅「发现课程」分页 + 关键字（仅看 approved） | — | — |
 | 课程新建 | — | ✅「申请新课程」→ 进入待审批 | ✅ 直接创建（绕过审批） |
 | 课程审批 | — | — | ✅ 通过 / 驳回（带理由） |
+| **选课流程** | ✅ 申请加入（pending）/ 接受教师邀请 / 取消申请 | ✅ 邀请学生（pending）/ 审批申请 / 移除学生 | — |
+| 课程内学生名单 | — | ✅「学生」Tab：审批/邀请/移除 + 状态筛选 | — |
 | 删除课程 | — | 仅删自己未通过的草稿 | ✅ 删除任意课程 |
 | 用户管理 | — | — | ✅ 启停 / 重置密码 / 删除 |
 | 仪表盘统计 | — | 仅自己课程的数据 | ✅ 全局：用户/课程/反馈/问卷 |
 | AI 助手 | ✅（评价总结/选课推荐/难度） | ✅（教学改进/起草问卷） | ✅（接入相同接口） |
+| 账户安全（修改密码/邮箱/昵称） | ✅ | ✅ | ✅ |
+| 消息通知（邀请/申请/问卷推送） | ✅ | ✅（问卷答卷新增） | ✅ |
 | 数据隐私 | 答卷匿名 | 收到的反馈/答卷匿名 | 仅查看聚合统计 |
 
 ### 内置管理员账号（仅供项目组使用，**首次登录后请立即修改密码**）
@@ -65,7 +70,8 @@
 | 模块 | 后端 Controller | 关键能力 |
 |---|---|---|
 | 用户/登录/注册 | `LoginController` `UserController` `WebuserController` | JWT 登录，按 role 区分；**禁止 role=admin 注册**；启动时自动注入两个内置管理员 |
-| 课程 | `CoursesController` `CourseStudentsController` | 学生只看 approved；教师走 `/courses/teacher/submit` 申请，**必经管理员审批** |
+| 课程 | `CoursesController` `CourseStudentsController` | 学生只看已加入的 approved 关系；教师走 `/courses/teacher/submit` 申请，**必经管理员审批**；新增 `/courses/discover` 提供学生侧已通过课程检索 |
+| **选课/邀请** | `CourseEnrollmentController` | 双向选课：学生申请（`student_apply`）/ 教师邀请（`teacher_invite`）→ 对端审批通过/驳回；`sys_course_students.status ∈ {pending, approved, rejected}` |
 | **管理员** | `AdminController` `CoursesController#admin/*` | 全局看板 / 用户分页/启停/重置密码/删除；课程审批通过/驳回（带理由） |
 | 问卷 | `QuestionnairesController` `CourseQuestionnaireController` `QuestionnaireResponsesController` | 问卷发布/回收，**学生答案匿名化** (`/FillinAnonymous`) |
 | 课程反馈 | `CourseFeedbackController` | 5 星评分 + 文本 |
@@ -296,12 +302,77 @@ Android/
 | GET | `/analytics/course/{id}/dashboard` | 课程数据看板 |
 | POST | `/courses/teacher/submit` | **教师**提交课程申请（必走审批） |
 | GET | `/courses/teacher/my` | **教师**自己的全部课程（含 pending/rejected） |
+| GET | `/courses/discover?pageNum=&pageSize=&keyword=` | **学生**发现/搜索已通过课程（分页） |
 | GET | `/courses/admin/pending` | **管理员**查询待审批课程列表 |
 | POST | `/courses/admin/approve/{id}` | **管理员**审批通过 |
 | POST | `/courses/admin/reject/{id}` | **管理员**审批驳回（body: `{reason}`） |
+| POST | `/enrollments/student/apply` | **学生**申请加入课程（body: `{courseId, applyMessage?}`） |
+| POST | `/enrollments/student/cancel/{id}` | **学生**取消自己的待审批申请 |
+| POST | `/enrollments/student/accept/{id}` | **学生**接受教师邀请 |
+| POST | `/enrollments/student/leave/{id}` | **学生**主动退出已加入课程 |
+| GET | `/enrollments/student/my?status=` | **学生**所有选课关系（含申请/邀请/已加入/已驳回） |
+| GET | `/enrollments/teacher/course/{cid}` | **教师**查看一门课程下的全部关系（含学生信息） |
+| POST | `/enrollments/teacher/invite` | **教师**邀请学生（body: `{courseId, studentIds}`） |
+| POST | `/enrollments/teacher/approve/{id}` | **教师**审批通过学生申请 |
+| POST | `/enrollments/teacher/reject/{id}` | **教师**驳回学生申请（body: `{reason}`） |
+| POST | `/enrollments/teacher/remove/{id}` | **教师**移除已加入学生 |
+| GET | `/user/me` | 当前登录用户信息（不含密码） |
+| POST | `/user/me/password` | 当前用户修改密码（body: `{oldPassword, newPassword}`） |
+| POST | `/user/me/profile` | 当前用户修改资料（email / nickname / avatarUrl） |
 | GET | `/admin/dashboard` | **管理员**全局看板统计 |
 | GET | `/admin/users/page` | **管理员**用户分页 + 关键字 / 角色 / 状态过滤 |
 | POST | `/admin/users/{id}/disable` `/enable` `/reset-password` `/delete` | **管理员**对单个用户的操作 |
+
+---
+
+## 5.1 选课工作流（双向）
+
+```
+            ┌──────── 学生申请（student_apply） ─────────┐
+            │                                              ▼
+学生：发现课程  ───►  apply ──► sys_course_students.status = pending
+                                                            │
+                          ◄─ teacher approve ──┐            │
+                                                │            │
+教师：课程详情·学生 Tab ◄─ pending row ◄────────┘            │
+                                                            │
+            ┌──────── 教师邀请（teacher_invite） ─────────┘
+            ▼
+教师：课程·学生 Tab ─► invite ─► sys_course_students.status = pending
+                                                            │
+                          ◄─ student accept ──┐             │
+                                              │             │
+学生：我的课程·教师邀请 ◄─ pending row ◄──────┘             │
+                                                            ▼
+                                  双向同时进入 status=approved
+                                  → 学生「我的课程」可见
+                                  → 教师「学生」Tab 已加入名单
+```
+
+- 学生侧入口：`StudentCourseListScreen` 顶栏「发现课程」AssistChip → `StudentDiscoverCoursesScreen`，支持关键字搜索 + 分页 + 申请留言。
+- 学生侧通知：`StudentCourseListScreen` 已加入 / 待审批的申请 / 教师邀请 / 已驳回 四个分组，附「接受 / 拒绝 / 取消」操作。
+- 教师侧入口：`TeacherCourseDetailScreen` 新增「学生」Tab，支持邀请、审批、驳回（带理由）、移除，含状态筛选 chip。
+- 后端表结构：`sys_course_students` 增字段 `status / source / apply_message / reject_reason / reviewed_at`，并在 `DatabaseInitializer` 中通过 `safeExec` 自动迁移老库；学生「我的课程」与教师「课程学生名单」均改为只取 `status='approved'`。
+
+## 5.2 「我的」菜单功能映射
+
+学生端 `StudentProfileScreen`、教师端 `TeacherProfileScreen` 的全部条目均已接入路由 / Tab 切换：
+
+| 入口（学生） | 路由 / 行为 |
+|---|---|
+| 消息通知 | `Routes.NOTIFICATIONS` → `NotificationsScreen`：拉取「待回复邀请 / 待审批申请 / 进行中问卷」 |
+| 账户安全 | `Routes.ACCOUNT_SECURITY` → `AccountSecurityScreen`（修改昵称 / 邮箱 / 密码） |
+| 我的收藏 | `Routes.BOOKMARKS` → `BookmarksScreen`（占位，预留接口） |
+| AI 助手设置 | `Routes.ASSISTANT_SETTINGS` → `AssistantSettingsScreen`（RAG 来源 / 简洁模式 / 引用） |
+| 帮助与反馈 | `Routes.HELP_FEEDBACK` → `HelpFeedbackScreen`（FAQ + 反馈） |
+
+| 入口（教师） | 路由 / 行为 |
+|---|---|
+| 课程管理 | 切换到 TeacherMainScaffold 的「课程」Tab |
+| 问卷模板库 | 切换到「问卷」Tab |
+| 教学分析 | 切换到「分析」Tab |
+| AI 助教 | `Routes.TEACHER_ASSISTANT` → `TeacherAssistantScreen`（全屏 AI 对话，含教师快捷指令） |
+| 账户安全 | 同学生端 `Routes.ACCOUNT_SECURITY` |
 
 ---
 
