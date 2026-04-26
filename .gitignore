@@ -1,15 +1,30 @@
+### IDE ###
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
+.idea/
+*.ipr
+*.iws
+
+### Gradle ###
+.gradle/
+build/
+local.properties
+
+### Android ###
 /captures
 .externalNativeBuild
 .cxx
-local.properties
+
+### Maven ###
+backend/target/
+
+### Deploy secrets ###
+deploy/.env
+
+### OS ###
+.DS_Store
+Thumbs.db
+desktop.ini
+
+### Misc ###
+*.log
+*.tmp
