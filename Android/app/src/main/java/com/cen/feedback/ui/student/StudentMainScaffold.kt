@@ -14,14 +14,17 @@ import androidx.compose.material.icons.rounded.QuestionAnswer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.cen.feedback.R
 import com.cen.feedback.ui.components.AiAssistantFab
+import com.cen.feedback.ui.components.AppBottomTab
+import com.cen.feedback.ui.components.RoleMainScaffold
 import com.cen.feedback.ui.session.SessionViewModel
 import com.cen.feedback.ui.student.calendar.CalendarScreen
 import com.cen.feedback.ui.student.home.StudentHomeScreen
@@ -29,12 +32,12 @@ import com.cen.feedback.ui.student.course.StudentCourseListScreen
 import com.cen.feedback.ui.student.profile.StudentProfileScreen
 import com.cen.feedback.ui.student.questionnaire.StudentQuestionnaireListScreen
 
-enum class StudentTab(val title: String, val icon: ImageVector) {
-    Home("首页", Icons.Rounded.Home),
-    Courses("课程", Icons.Rounded.LibraryBooks),
-    Questionnaires("问卷", Icons.Rounded.QuestionAnswer),
-    Calendar("日历", Icons.Rounded.CalendarMonth),
-    Profile("我的", Icons.Rounded.Person),
+enum class StudentTab(@StringRes val titleRes: Int, val icon: ImageVector) {
+    Home(R.string.tab_home, Icons.Rounded.Home),
+    Courses(R.string.tab_courses, Icons.Rounded.LibraryBooks),
+    Questionnaires(R.string.tab_questionnaires, Icons.Rounded.QuestionAnswer),
+    Calendar(R.string.tab_calendar, Icons.Rounded.CalendarMonth),
+    Profile(R.string.tab_profile, Icons.Rounded.Person),
 }
 
 @Composable
@@ -43,29 +46,31 @@ fun StudentMainScaffold(
     session: SessionViewModel = hiltViewModel(),
 ) {
     var tab by rememberSaveable { mutableStateOf(StudentTab.Home) }
-    val sessionState by session.uiState.collectAsStateWithLifecycle()
     val aiVm: com.cen.feedback.ui.student.ai.AiViewModel = hiltViewModel()
     val aiState by aiVm.state.collectAsStateWithLifecycle()
+    val tabs = remember {
+        StudentTab.values().map { AppBottomTab(titleRes = it.titleRes, icon = it.icon) }
+    }
+    val studentQuickActions = listOf(
+        R.string.ai_student_q1_label to R.string.ai_student_q1_prompt,
+        R.string.ai_student_q2_label to R.string.ai_student_q2_prompt,
+        R.string.ai_student_q3_label to R.string.ai_student_q3_prompt,
+    ).map { (a, b) -> stringResource(a) to stringResource(b) }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                tonalElevation = 8.dp,
-            ) {
-                StudentTab.values().forEach { item ->
-                    NavigationBarItem(
-                        selected = tab == item,
-                        onClick = { tab = item },
-                        icon = { Icon(item.icon, null) },
-                        label = { Text(item.title) },
-                    )
-                }
-            }
+    RoleMainScaffold(
+        tabs = tabs,
+        selectedIndex = tab.ordinal,
+        onSelectTab = { tab = StudentTab.values()[it] },
+        floatingContent = {
+            AiAssistantFab(
+                messages = aiState.messages,
+                sending = aiState.sending,
+                onSend = aiVm::send,
+                quickActions = studentQuickActions,
+            )
         },
-    ) { padding ->
-        Box(modifier = Modifier
-            .fillMaxSize()
-            .padding(padding)) {
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             AnimatedContent(
                 targetState = tab,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -84,17 +89,6 @@ fun StudentMainScaffold(
                         onNavigate = { route -> navController.navigate(route) },
                     )
                 }
-            }
-
-            // 浮动 AI 助手
-            Box(modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 8.dp, bottom = 8.dp)) {
-                AiAssistantFab(
-                    messages = aiState.messages,
-                    sending = aiState.sending,
-                    onSend = aiVm::send,
-                )
             }
         }
     }

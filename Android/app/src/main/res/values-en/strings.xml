@@ -1,0 +1,132 @@
+<resources>
+    <string name="app_name">Course Feedback</string>
+    <string name="cd_back">Back</string>
+    <string name="course_default_name">Course</string>
+    <string name="action_rate_teacher">Rate instructor</string>
+    <string name="ai_replying">Replying…</string>
+
+    <string name="tab_home">Home</string>
+    <string name="tab_courses">Courses</string>
+    <string name="tab_questionnaires">Surveys</string>
+    <string name="tab_calendar">Calendar</string>
+    <string name="tab_profile">Me</string>
+    <string name="tab_dashboard">Dashboard</string>
+    <string name="tab_analysis">Analytics</string>
+    <string name="tab_approval">Approval</string>
+    <string name="tab_users">Users</string>
+
+    <string name="action_view_all">See all</string>
+    <string name="action_manage">Manage</string>
+    <string name="action_view">View</string>
+    <string name="action_retry">Retry</string>
+    <string name="placeholder_dash">—</string>
+    <string name="format_semester">Semester %1$d</string>
+
+    <string name="default_nickname_student">there</string>
+    <string name="default_nickname_teacher">Teacher</string>
+    <string name="default_nickname_admin">Admin</string>
+    <string name="course_fallback_initial">C</string>
+
+    <string name="student_home_title">Good morning, %1$s</string>
+    <string name="student_home_subtitle_pending">You have %1$d course(s), %2$d survey(s) to complete</string>
+    <string name="student_home_subtitle_none">You have %1$d course(s), no pending surveys</string>
+    <string name="student_home_hint_ai">Try the AI assistant: course picks, difficulty, review summaries</string>
+    <string name="student_home_metric_courses">My courses</string>
+    <string name="student_home_metric_pending_q">Pending surveys</string>
+    <string name="student_home_section_active_q">Active surveys</string>
+    <string name="student_home_empty_active_q_title">No active surveys</string>
+    <string name="student_home_empty_active_q_subtitle">Enjoy class for now</string>
+    <string name="student_home_section_my_courses">My courses</string>
+    <string name="student_home_empty_courses_title">No enrollments yet</string>
+    <string name="student_home_empty_courses_subtitle">Ask your instructor to add you</string>
+    <string name="questionnaire_status_in_progress">Open</string>
+    <string name="questionnaire_status_submitted">Submitted</string>
+    <string name="questionnaire_untitled">Untitled survey</string>
+
+    <string name="teacher_home_title">Welcome back, %1$s</string>
+    <string name="teacher_home_title_fallback">Welcome back</string>
+    <string name="teacher_home_subtitle">Managing %1$d course(s), %2$d survey template(s)</string>
+    <string name="teacher_home_hint_ai">AI TA: summarize replies, draft items, teaching tips</string>
+    <string name="teacher_home_metric_courses">My courses</string>
+    <string name="teacher_home_metric_templates">Templates</string>
+    <string name="teacher_home_section_courses">Courses</string>
+    <string name="teacher_home_empty_courses_title">No courses yet</string>
+    <string name="teacher_home_empty_courses_subtitle">Contact admin or create on the web</string>
+    <string name="teacher_home_section_templates">Survey templates</string>
+    <string name="teacher_home_empty_templates_title">No templates</string>
+    <string name="teacher_home_empty_templates_subtitle">Create your first template in Surveys</string>
+
+    <string name="admin_dashboard_title">Hello, %1$s</string>
+    <string name="admin_dashboard_subtitle">Managing %1$d users · %2$d courses</string>
+    <string name="admin_dashboard_hint_security">Admin accounts are invite-only. Keep credentials safe.</string>
+    <string name="admin_section_user_mix">Users</string>
+    <string name="admin_label_students">Students</string>
+    <string name="admin_label_teachers">Teachers</string>
+    <string name="admin_label_admins">Admins</string>
+    <string name="admin_label_disabled">Disabled</string>
+    <string name="admin_section_approval">Course approval</string>
+    <string name="admin_metric_pending">Pending</string>
+    <string name="admin_metric_approved">Approved</string>
+    <string name="admin_metric_rejected">Rejected</string>
+    <string name="admin_section_feedback">Feedback &amp; surveys</string>
+    <string name="admin_metric_q_templates">Survey templates</string>
+    <string name="admin_metric_q_responses">Responses</string>
+    <string name="admin_metric_feedbacks">Course reviews</string>
+    <string name="admin_metric_teacher_ratings">Instructor ratings</string>
+    <string name="admin_section_today">Today</string>
+    <string name="admin_metric_today_responses">New responses today</string>
+    <string name="admin_metric_today_feedbacks">New reviews today</string>
+
+    <string name="login_brand">Course Feedback</string>
+    <string name="login_tagline">AI-powered feedback and teaching collaboration</string>
+    <string name="login_welcome">Welcome back</string>
+    <string name="login_welcome_hint">One account, tailored by role</string>
+    <string name="login_username">Username</string>
+    <string name="login_password">Password</string>
+    <string name="login_action">Sign in</string>
+    <string name="login_no_account">No account yet?</string>
+    <string name="login_register_now">Register</string>
+    <string name="login_footer">© Course Feedback</string>
+
+    <string name="register_title">Create account</string>
+    <string name="register_subtitle">Pick a role; you’ll land on the matching home after sign-in</string>
+    <string name="register_admin_hint">Admin accounts are not self-serve. Contact your team.</string>
+    <string name="register_nickname">Nickname</string>
+    <string name="register_email_optional">Email (optional)</string>
+    <string name="register_action">Register</string>
+    <string name="role_student">Student</string>
+    <string name="role_teacher">Teacher</string>
+    <string name="role_admin">Admin</string>
+
+    <string name="ai_student_q1_label">Summarize course reputation</string>
+    <string name="ai_student_q1_prompt">Summarize this course’s reputation, strengths, and weaknesses from reviews.</string>
+    <string name="ai_student_q2_label">Course recommendations</string>
+    <string name="ai_student_q2_prompt">What should I take next? Recommend based on past feedback.</string>
+    <string name="ai_student_q3_label">Assess difficulty</string>
+    <string name="ai_student_q3_prompt">Assess difficulty from historical feedback and give study tips.</string>
+
+    <string name="ai_teacher_q1_label">Summarize survey feedback</string>
+    <string name="ai_teacher_q1_prompt">Summarize recent survey feedback and suggest improvements.</string>
+    <string name="ai_teacher_q2_label">Teaching improvements</string>
+    <string name="ai_teacher_q2_prompt">Given recent reviews, suggest teaching improvements.</string>
+    <string name="ai_teacher_q3_label">Draft survey items</string>
+    <string name="ai_teacher_q3_prompt">Draft a course feedback survey for the chapter just finished.</string>
+
+    <string name="ai_panel_title">AI study assistant</string>
+    <string name="ai_panel_subtitle">RAG over course data</string>
+    <string name="ai_panel_close">Close</string>
+    <string name="ai_panel_send">Send</string>
+    <string name="ai_panel_input_hint">Ask something…</string>
+    <string name="ai_panel_empty_title">Hi — I’m your assistant ✨</string>
+    <string name="ai_panel_empty_body">Summarize reputation, suggest courses, or gauge difficulty.</string>
+    <string name="cd_ai_assistant">AI assistant</string>
+
+    <string name="course_tab_overview">Overview</string>
+    <string name="course_tab_resources">Materials</string>
+    <string name="course_tab_assignments">Assignments</string>
+    <string name="course_tab_questionnaires">Surveys</string>
+    <string name="course_tab_qa">Q&amp;A</string>
+    <string name="course_tab_reviews">Reviews</string>
+
+    <string name="t_course_tab_students">Students</string>
+</resources>

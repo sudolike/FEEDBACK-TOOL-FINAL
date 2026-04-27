@@ -1,3 +1,145 @@
 <resources>
     <string name="app_name">课评云 · Feedback</string>
+    <string name="cd_back">返回</string>
+    <string name="course_default_name">课程</string>
+    <string name="action_rate_teacher">评价老师</string>
+    <string name="ai_replying">正在回复…</string>
+
+    <!-- Bottom navigation -->
+    <string name="tab_home">首页</string>
+    <string name="tab_courses">课程</string>
+    <string name="tab_questionnaires">问卷</string>
+    <string name="tab_calendar">日历</string>
+    <string name="tab_profile">我的</string>
+    <string name="tab_dashboard">看板</string>
+    <string name="tab_analysis">分析</string>
+    <string name="tab_approval">审批</string>
+    <string name="tab_users">用户</string>
+
+    <!-- Common actions -->
+    <string name="action_view_all">查看全部</string>
+    <string name="action_manage">管理</string>
+    <string name="action_view">查看</string>
+    <string name="action_retry">重试</string>
+    <string name="placeholder_dash">—</string>
+    <string name="format_semester">第 %1$d 学期</string>
+
+    <!-- Defaults -->
+    <string name="default_nickname_student">同学</string>
+    <string name="default_nickname_teacher">老师</string>
+    <string name="default_nickname_admin">Admin</string>
+    <string name="course_fallback_initial">课</string>
+
+    <!-- Student home -->
+    <string name="student_home_title">早安，%1$s</string>
+    <string name="student_home_subtitle_pending">今天已选 %1$d 门课，%2$d 份问卷待你完成</string>
+    <string name="student_home_subtitle_none">今天已选 %1$d 门课，暂无待处理问卷</string>
+    <string name="student_home_hint_ai">试试 AI 助手：选课推荐 / 课程难度评估 / 课评摘要</string>
+    <string name="student_home_metric_courses">我的课程</string>
+    <string name="student_home_metric_pending_q">待填问卷</string>
+    <string name="student_home_section_active_q">进行中的问卷</string>
+    <string name="student_home_empty_active_q_title">暂无进行中的问卷</string>
+    <string name="student_home_empty_active_q_subtitle">好好享受当下的课堂吧</string>
+    <string name="student_home_section_my_courses">我的课程</string>
+    <string name="student_home_empty_courses_title">还没有选课记录</string>
+    <string name="student_home_empty_courses_subtitle">请联系教师将你加入课程</string>
+    <string name="questionnaire_status_in_progress">进行中</string>
+    <string name="questionnaire_status_submitted">已提交</string>
+    <string name="questionnaire_untitled">未命名问卷</string>
+
+    <!-- Teacher home -->
+    <string name="teacher_home_title">欢迎回来，%1$s 老师</string>
+    <string name="teacher_home_title_fallback">欢迎回来，老师</string>
+    <string name="teacher_home_subtitle">正在维护 %1$d 门课程，已有 %2$d 份问卷模板</string>
+    <string name="teacher_home_hint_ai">AI 助教：自动总结问卷答复 / 草拟新题 / 给出教学建议</string>
+    <string name="teacher_home_metric_courses">我的课程</string>
+    <string name="teacher_home_metric_templates">问卷模板</string>
+    <string name="teacher_home_section_courses">教学课程</string>
+    <string name="teacher_home_empty_courses_title">尚未维护课程</string>
+    <string name="teacher_home_empty_courses_subtitle">请联系管理员或在 Web 端创建课程</string>
+    <string name="teacher_home_section_templates">问卷模板</string>
+    <string name="teacher_home_empty_templates_title">暂无问卷模板</string>
+    <string name="teacher_home_empty_templates_subtitle">去问卷中心创建第一份模板吧</string>
+
+    <!-- Admin dashboard -->
+    <string name="admin_dashboard_title">你好，%1$s</string>
+    <string name="admin_dashboard_subtitle">正在维护 %1$d 位用户 · %2$d 门课程</string>
+    <string name="admin_dashboard_hint_security">管理员账号不开放注册，请妥善保管账号密码并定期轮换</string>
+    <string name="admin_section_user_mix">用户构成</string>
+    <string name="admin_label_students">学生</string>
+    <string name="admin_label_teachers">教师</string>
+    <string name="admin_label_admins">管理员</string>
+    <string name="admin_label_disabled">已停用</string>
+    <string name="admin_section_approval">课程审批</string>
+    <string name="admin_metric_pending">待审批</string>
+    <string name="admin_metric_approved">已通过</string>
+    <string name="admin_metric_rejected">已驳回</string>
+    <string name="admin_section_feedback">反馈与问卷</string>
+    <string name="admin_metric_q_templates">问卷模板</string>
+    <string name="admin_metric_q_responses">问卷答复</string>
+    <string name="admin_metric_feedbacks">课程评价</string>
+    <string name="admin_metric_teacher_ratings">教师评分</string>
+    <string name="admin_section_today">今日活跃</string>
+    <string name="admin_metric_today_responses">今日新增问卷</string>
+    <string name="admin_metric_today_feedbacks">今日新增课评</string>
+
+    <!-- Login -->
+    <string name="login_brand">课评云 Feedback</string>
+    <string name="login_tagline">AI 驱动的课程反馈与教学协作平台</string>
+    <string name="login_welcome">欢迎回来</string>
+    <string name="login_welcome_hint">用同一个账号登录，体验为你定制的界面</string>
+    <string name="login_username">用户名</string>
+    <string name="login_password">密码</string>
+    <string name="login_action">登 录</string>
+    <string name="login_no_account">还没有账号？</string>
+    <string name="login_register_now">立即注册</string>
+    <string name="login_footer">© 课评云 · 让教学反馈成为成长的引擎</string>
+
+    <!-- Register -->
+    <string name="register_title">创建账号</string>
+    <string name="register_subtitle">选择身份后注册，登录后将自动进入对应界面</string>
+    <string name="register_admin_hint">管理员账号不开放公开注册，请联系系统团队获取账号</string>
+    <string name="register_nickname">昵称</string>
+    <string name="register_email_optional">邮箱（可选）</string>
+    <string name="register_action">注 册</string>
+    <string name="role_student">学生</string>
+    <string name="role_teacher">教师</string>
+    <string name="role_admin">管理员</string>
+
+    <!-- AI quick actions (student) -->
+    <string name="ai_student_q1_label">总结这门课的口碑</string>
+    <string name="ai_student_q1_prompt">请基于课程评价数据总结这门课的口碑、优点、不足。</string>
+    <string name="ai_student_q2_label">选课推荐</string>
+    <string name="ai_student_q2_prompt">我现在该选什么课？请基于历史评价给我推荐。</string>
+    <string name="ai_student_q3_label">评估课程难度</string>
+    <string name="ai_student_q3_prompt">请基于历史反馈评估这门课的难度，并给出学习建议。</string>
+
+    <!-- AI quick actions (teacher) -->
+    <string name="ai_teacher_q1_label">总结这次问卷反馈</string>
+    <string name="ai_teacher_q1_prompt">请基于我最近发布的问卷反馈，总结学生评价并给出改进建议。</string>
+    <string name="ai_teacher_q2_label">教学改进建议</string>
+    <string name="ai_teacher_q2_prompt">结合最近的课评数据，给我教学改进建议。</string>
+    <string name="ai_teacher_q3_label">起草问卷题目</string>
+    <string name="ai_teacher_q3_prompt">请帮我针对刚结束的章节起草一份课程反馈问卷。</string>
+
+    <!-- AI panel -->
+    <string name="ai_panel_title">AI 学习助手</string>
+    <string name="ai_panel_subtitle">基于课程数据 RAG 检索增强</string>
+    <string name="ai_panel_close">关闭</string>
+    <string name="ai_panel_send">发送</string>
+    <string name="ai_panel_input_hint">问我点什么…</string>
+    <string name="ai_panel_empty_title">Hi～我是你的学习助手 ✨</string>
+    <string name="ai_panel_empty_body">我可以帮你总结课程口碑、推荐选课方向，或评估课程难度。</string>
+    <string name="cd_ai_assistant">AI 助手</string>
+
+    <!-- Course detail tabs (student) -->
+    <string name="course_tab_overview">概览</string>
+    <string name="course_tab_resources">资料</string>
+    <string name="course_tab_assignments">作业</string>
+    <string name="course_tab_questionnaires">问卷</string>
+    <string name="course_tab_qa">问答</string>
+    <string name="course_tab_reviews">课评</string>
+
+    <!-- Course detail tabs (teacher) -->
+    <string name="t_course_tab_students">学生</string>
 </resources>

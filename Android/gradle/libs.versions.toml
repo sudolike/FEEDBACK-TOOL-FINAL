@@ -21,6 +21,7 @@ glide = "4.16.0"
 lottie = "6.4.0"
 markwon = "4.6.2"
 biometric = "1.1.0"
+kotlin = "2.2.10"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -52,3 +53,4 @@ biometric = { group = "androidx.biometric", name = "biometric", version.ref = "b
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

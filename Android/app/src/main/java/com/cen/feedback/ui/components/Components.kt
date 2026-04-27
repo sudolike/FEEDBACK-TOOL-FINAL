@@ -18,6 +18,7 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -37,6 +39,132 @@ import com.cen.feedback.ui.theme.Primary600
 import com.cen.feedback.ui.theme.Primary700
 import com.cen.feedback.ui.theme.Slate200
 import com.cen.feedback.ui.theme.Slate900
+import com.cen.feedback.ui.theme.Pink500
+
+object AppDimens {
+    val pagePadding = 16.dp
+    val itemSpacing = 12.dp
+    val sectionVertical = 8.dp
+    val heroCorner = 20.dp
+    val cardCorner = 20.dp
+    val minTouchHeight = 48.dp
+    val scrollableTabEdgePadding = 12.dp
+}
+
+data class AppBottomTab(
+    @param:StringRes val titleRes: Int,
+    val icon: ImageVector,
+)
+
+@Composable
+fun RoleMainScaffold(
+    tabs: List<AppBottomTab>,
+    selectedIndex: Int,
+    onSelectTab: (Int) -> Unit,
+    floatingContent: (@Composable () -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Scaffold(
+        bottomBar = {
+            NavigationBar(tonalElevation = 8.dp) {
+                tabs.forEachIndexed { index, item ->
+                    NavigationBarItem(
+                        selected = selectedIndex == index,
+                        onClick = { onSelectTab(index) },
+                        icon = { Icon(item.icon, null) },
+                        label = { Text(stringResource(item.titleRes)) },
+                    )
+                }
+            }
+        },
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+        ) {
+            content()
+            if (floatingContent != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 8.dp, bottom = 8.dp),
+                ) {
+                    floatingContent()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 课程详情页顶部：渐变背景 + 返回 + 可选右侧操作（如「评价老师」）。
+ */
+@Composable
+fun CourseDetailHero(
+    title: String,
+    metaLine: String,
+    description: String?,
+    onBack: () -> Unit,
+    backContentDescription: String,
+    modifier: Modifier = Modifier,
+    colors: List<Color> = listOf(Primary600, Primary400),
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Brush.linearGradient(colors)),
+    ) {
+        Column(
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(
+                    horizontal = AppDimens.sectionVertical,
+                    vertical = AppDimens.sectionVertical,
+                ),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Rounded.ArrowBack, backContentDescription, tint = Color.White)
+                }
+                Spacer(Modifier.weight(1f))
+                if (trailing != null) {
+                    Row(horizontalArrangement = Arrangement.End) {
+                        trailing()
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier.padding(
+                    horizontal = AppDimens.pagePadding,
+                    vertical = AppDimens.sectionVertical,
+                ),
+            ) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = metaLine,
+                    color = Color.White.copy(alpha = 0.92f),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (!description.isNullOrBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = description,
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+    }
+}
 
 /**
  * 紫蓝渐变背景。学生端首页 / 头部默认采用。
@@ -51,6 +179,72 @@ fun GradientBackground(
         modifier = modifier.background(Brush.linearGradient(colors)),
         content = content,
     )
+}
+
+@Composable
+fun DashboardHero(
+    title: String,
+    subtitle: String,
+    hint: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    colors: List<Color> = listOf(Primary600, Primary400, Pink500.copy(alpha = 0.7f)),
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Brush.linearGradient(colors)),
+    ) {
+        Column(
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(20.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(icon, null, tint = Color.White)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = title,
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = subtitle,
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Surface(
+                color = Color.White.copy(alpha = 0.18f),
+                shape = RoundedCornerShape(AppDimens.heroCorner),
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = Color.White)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = hint,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -150,7 +344,7 @@ fun GlassCard(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(AppDimens.cardCorner)
     Surface(
         modifier = modifier
             .shadow(6.dp, shape, ambientColor = Slate900.copy(alpha = 0.08f))
@@ -159,7 +353,10 @@ fun GlassCard(
         color = MaterialTheme.colorScheme.surface,
         shape = shape,
     ) {
-        Column(modifier = Modifier.padding(20.dp), content = content)
+        Column(
+            modifier = Modifier.padding(AppDimens.pagePadding + 4.dp),
+            content = content,
+        )
     }
 }
 
@@ -176,12 +373,12 @@ fun MetricCard(
 ) {
     Surface(
         modifier = modifier
-            .shadow(4.dp, RoundedCornerShape(20.dp), ambientColor = Slate900.copy(alpha = 0.06f))
-            .clip(RoundedCornerShape(20.dp)),
+            .shadow(4.dp, RoundedCornerShape(AppDimens.cardCorner), ambientColor = Slate900.copy(alpha = 0.06f))
+            .clip(RoundedCornerShape(AppDimens.cardCorner)),
         color = MaterialTheme.colorScheme.surface,
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(AppDimens.pagePadding),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -222,7 +419,7 @@ fun SectionTitle(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = AppDimens.pagePadding, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(

@@ -35,9 +35,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.cen.feedback.R
 import com.cen.feedback.ui.theme.Pink500
 import com.cen.feedback.ui.theme.Primary400
 import com.cen.feedback.ui.theme.Primary600
@@ -103,7 +105,12 @@ private fun PulsingFab(onClick: () -> Unit) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(Icons.Rounded.AutoAwesome, "AI 助手", tint = Color.White, modifier = Modifier.size(28.dp))
+        Icon(
+            Icons.Rounded.AutoAwesome,
+            stringResource(R.string.cd_ai_assistant),
+            tint = Color.White,
+            modifier = Modifier.size(28.dp),
+        )
     }
 }
 
@@ -149,12 +156,19 @@ private fun AiPanel(
                     }
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("AI 学习助手", color = Color.White, fontWeight = FontWeight.SemiBold)
-                        Text("基于课程数据 RAG 检索增强", color = Color.White.copy(alpha = 0.85f),
-                            style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            stringResource(R.string.ai_panel_title),
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            stringResource(R.string.ai_panel_subtitle),
+                            color = Color.White.copy(alpha = 0.85f),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
                     }
                     IconButton(onClick = onClose) {
-                        Icon(Icons.Rounded.Close, "关闭", tint = Color.White)
+                        Icon(Icons.Rounded.Close, stringResource(R.string.ai_panel_close), tint = Color.White)
                     }
                 }
             }
@@ -169,13 +183,17 @@ private fun AiPanel(
                 if (messages.isEmpty()) {
                     item {
                         Column(modifier = Modifier.padding(20.dp)) {
-                            Text("Hi～我是你的学习助手 ✨",
+                            Text(
+                                stringResource(R.string.ai_panel_empty_title),
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold)
+                                fontWeight = FontWeight.SemiBold,
+                            )
                             Spacer(Modifier.height(6.dp))
-                            Text("我可以帮你总结课程口碑、推荐选课方向，或评估课程难度。",
+                            Text(
+                                stringResource(R.string.ai_panel_empty_body),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium)
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                     }
                     item {
@@ -211,7 +229,7 @@ private fun AiPanel(
                         value = input,
                         onValueChange = { input = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("问我点什么…") },
+                        placeholder = { Text(stringResource(R.string.ai_panel_input_hint)) },
                         shape = RoundedCornerShape(20.dp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         maxLines = 4,
@@ -238,7 +256,7 @@ private fun AiPanel(
                             ),
                         enabled = canSend,
                     ) {
-                        Icon(Icons.Rounded.Send, "发送", tint = Color.White)
+                        Icon(Icons.Rounded.Send, stringResource(R.string.ai_panel_send), tint = Color.White)
                     }
                 }
             }
@@ -291,18 +309,25 @@ private fun TypingIndicator() {
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            for (i in 0..2) {
-                val active = frame.toInt() == i
-                val a by animateFloatAsStatePublic(if (active) 1f else 0.4f)
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(Slate900.copy(alpha = a))
-                )
+            Text(
+                text = stringResource(R.string.ai_replying),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                for (i in 0..2) {
+                    val active = frame.toInt() == i
+                    val a by animateFloatAsStatePublic(if (active) 1f else 0.4f)
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Slate900.copy(alpha = a))
+                    )
+                }
             }
         }
     }

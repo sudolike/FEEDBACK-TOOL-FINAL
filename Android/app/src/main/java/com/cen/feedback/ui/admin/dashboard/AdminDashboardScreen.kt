@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -13,15 +12,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import com.cen.feedback.R
 import com.cen.feedback.data.model.AdminDashboard
 import com.cen.feedback.data.repo.FeedbackRepository
 import com.cen.feedback.ui.admin.AdminTab
@@ -52,7 +52,7 @@ class AdminDashboardViewModel @Inject constructor(
     fun refresh() = viewModelScope.launch {
         _state.update { it.copy(loading = true, error = null) }
         runCatching {
-            val nick = repo.tokenStore.username() ?: "Admin"
+            val nick = repo.tokenStore.username().orEmpty()
             val data = repo.adminDashboard()
             nick to data
         }.onSuccess { (nick, data) ->
@@ -69,23 +69,36 @@ fun AdminDashboardScreen(
     vm: AdminDashboardViewModel = hiltViewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
+    val nick = s.nickname.ifBlank { stringResource(R.string.default_nickname_admin) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 96.dp),
     ) {
-        item { HeaderHero(s.nickname, s.data) }
+        item {
+            DashboardHero(
+                title = stringResource(R.string.admin_dashboard_title, nick),
+                subtitle = stringResource(
+                    R.string.admin_dashboard_subtitle,
+                    s.data?.totalUsers ?: 0,
+                    s.data?.totalCourses ?: 0,
+                ),
+                hint = stringResource(R.string.admin_dashboard_hint_security),
+                icon = Icons.Rounded.AdminPanelSettings,
+                colors = listOf(Primary800, Primary600, Pink500.copy(alpha = 0.6f)),
+            )
+        }
 
-        item { SectionTitle("用户构成") }
+        item { SectionTitle(stringResource(R.string.admin_section_user_mix)) }
         item {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = AppDimens.pagePadding),
+                horizontalArrangement = Arrangement.spacedBy(AppDimens.itemSpacing),
             ) {
                 val d = s.data
                 item {
                     StatTile(
                         icon = Icons.Rounded.School,
-                        label = "学生",
+                        label = stringResource(R.string.admin_label_students),
                         value = (d?.totalStudents ?: 0L).toString(),
                         accent = Primary600,
                     )
@@ -93,7 +106,7 @@ fun AdminDashboardScreen(
                 item {
                     StatTile(
                         icon = Icons.Rounded.Person,
-                        label = "教师",
+                        label = stringResource(R.string.admin_label_teachers),
                         value = (d?.totalTeachers ?: 0L).toString(),
                         accent = Accent600,
                     )
@@ -101,7 +114,7 @@ fun AdminDashboardScreen(
                 item {
                     StatTile(
                         icon = Icons.Rounded.AdminPanelSettings,
-                        label = "管理员",
+                        label = stringResource(R.string.admin_label_admins),
                         value = (d?.totalAdmins ?: 0L).toString(),
                         accent = Pink500,
                     )
@@ -109,7 +122,7 @@ fun AdminDashboardScreen(
                 item {
                     StatTile(
                         icon = Icons.Rounded.Block,
-                        label = "已停用",
+                        label = stringResource(R.string.admin_label_disabled),
                         value = (d?.disabledUsers ?: 0L).toString(),
                         accent = Danger500,
                     )
@@ -118,34 +131,36 @@ fun AdminDashboardScreen(
         }
 
         item {
-            SectionTitle("课程审批", trailing = {
-                TextButton(onClick = { onJumpTab(AdminTab.Approval) }) { Text("管理") }
+            SectionTitle(stringResource(R.string.admin_section_approval), trailing = {
+                TextButton(onClick = { onJumpTab(AdminTab.Approval) }) {
+                    Text(stringResource(R.string.action_manage))
+                }
             })
         }
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = AppDimens.pagePadding),
+                horizontalArrangement = Arrangement.spacedBy(AppDimens.itemSpacing),
             ) {
                 MetricCard(
                     icon = Icons.Rounded.HourglassTop,
-                    label = "待审批",
+                    label = stringResource(R.string.admin_metric_pending),
                     value = (s.data?.pendingCourses ?: 0L).toString(),
                     accent = Warning500,
                     modifier = Modifier.weight(1f),
                 )
                 MetricCard(
                     icon = Icons.Rounded.CheckCircle,
-                    label = "已通过",
+                    label = stringResource(R.string.admin_metric_approved),
                     value = (s.data?.approvedCourses ?: 0L).toString(),
                     accent = Success500,
                     modifier = Modifier.weight(1f),
                 )
                 MetricCard(
                     icon = Icons.Rounded.Cancel,
-                    label = "已驳回",
+                    label = stringResource(R.string.admin_metric_rejected),
                     value = (s.data?.rejectedCourses ?: 0L).toString(),
                     accent = Danger500,
                     modifier = Modifier.weight(1f),
@@ -153,24 +168,24 @@ fun AdminDashboardScreen(
             }
         }
 
-        item { SectionTitle("反馈与问卷") }
+        item { SectionTitle(stringResource(R.string.admin_section_feedback)) }
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = AppDimens.pagePadding),
+                horizontalArrangement = Arrangement.spacedBy(AppDimens.itemSpacing),
             ) {
                 MetricCard(
                     icon = Icons.Rounded.Quiz,
-                    label = "问卷模板",
+                    label = stringResource(R.string.admin_metric_q_templates),
                     value = (s.data?.totalQuestionnaires ?: 0L).toString(),
                     accent = Primary600,
                     modifier = Modifier.weight(1f),
                 )
                 MetricCard(
                     icon = Icons.Rounded.Insights,
-                    label = "问卷答复",
+                    label = stringResource(R.string.admin_metric_q_responses),
                     value = (s.data?.totalResponses ?: 0L).toString(),
                     accent = Accent600,
                     modifier = Modifier.weight(1f),
@@ -181,19 +196,19 @@ fun AdminDashboardScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = AppDimens.pagePadding, vertical = AppDimens.sectionVertical),
+                horizontalArrangement = Arrangement.spacedBy(AppDimens.itemSpacing),
             ) {
                 MetricCard(
                     icon = Icons.Rounded.Reviews,
-                    label = "课程评价",
+                    label = stringResource(R.string.admin_metric_feedbacks),
                     value = (s.data?.totalFeedbacks ?: 0L).toString(),
                     accent = Pink500,
                     modifier = Modifier.weight(1f),
                 )
                 MetricCard(
                     icon = Icons.Rounded.Star,
-                    label = "教师评分",
+                    label = stringResource(R.string.admin_metric_teacher_ratings),
                     value = (s.data?.totalTeacherRatings ?: 0L).toString(),
                     accent = Warning500,
                     modifier = Modifier.weight(1f),
@@ -201,24 +216,24 @@ fun AdminDashboardScreen(
             }
         }
 
-        item { SectionTitle("今日活跃") }
+        item { SectionTitle(stringResource(R.string.admin_section_today)) }
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = AppDimens.pagePadding),
+                horizontalArrangement = Arrangement.spacedBy(AppDimens.itemSpacing),
             ) {
                 MetricCard(
                     icon = Icons.Rounded.Today,
-                    label = "今日新增问卷",
+                    label = stringResource(R.string.admin_metric_today_responses),
                     value = (s.data?.todayResponses ?: 0L).toString(),
                     accent = Primary600,
                     modifier = Modifier.weight(1f),
                 )
                 MetricCard(
                     icon = Icons.Rounded.Forum,
-                    label = "今日新增课评",
+                    label = stringResource(R.string.admin_metric_today_feedbacks),
                     value = (s.data?.todayFeedbacks ?: 0L).toString(),
                     accent = Accent600,
                     modifier = Modifier.weight(1f),
@@ -235,56 +250,9 @@ fun AdminDashboardScreen(
                         .padding(16.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    SecondaryButton(text = "重试", onClick = { vm.refresh() })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeaderHero(nickname: String, d: AdminDashboard?) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Brush.linearGradient(listOf(Primary800, Primary600, Pink500.copy(alpha = 0.6f))))
-    ) {
-        Column(modifier = Modifier.statusBarsPadding().padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.AdminPanelSettings, null, tint = Color.White) }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        "你好，$nickname",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        "正在维护 ${d?.totalUsers ?: 0} 位用户 · ${d?.totalCourses ?: 0} 门课程",
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            Surface(
-                color = Color.White.copy(alpha = 0.18f),
-                shape = RoundedCornerShape(20.dp),
-            ) {
-                Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.Security, null, tint = Color.White)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "管理员账号不开放注册，请妥善保管账号密码并定期轮换",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
+                    SecondaryButton(
+                        text = stringResource(R.string.action_retry),
+                        onClick = { vm.refresh() },
                     )
                 }
             }
@@ -300,7 +268,7 @@ private fun StatTile(
     accent: Color,
 ) {
     Surface(
-        modifier = Modifier.width(140.dp),
+        modifier = Modifier.widthIn(min = 132.dp, max = 180.dp),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 4.dp,

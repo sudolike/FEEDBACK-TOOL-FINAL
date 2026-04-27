@@ -12,7 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
+import androidx.annotation.StringRes
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.cen.feedback.ui.admin.approval.AdminCourseApprovalScreen
@@ -20,6 +20,9 @@ import com.cen.feedback.ui.admin.courses.AdminCourseListScreen
 import com.cen.feedback.ui.admin.dashboard.AdminDashboardScreen
 import com.cen.feedback.ui.admin.profile.AdminProfileScreen
 import com.cen.feedback.ui.admin.users.AdminUserListScreen
+import com.cen.feedback.R
+import com.cen.feedback.ui.components.AppBottomTab
+import com.cen.feedback.ui.components.RoleMainScaffold
 import com.cen.feedback.ui.session.SessionViewModel
 
 /**
@@ -30,12 +33,12 @@ import com.cen.feedback.ui.session.SessionViewModel
  *  - 用户：分页 / 启停 / 重置密码 / 删除
  *  - 我的：账号信息 + 退出
  */
-enum class AdminTab(val title: String, val icon: ImageVector) {
-    Dashboard("看板",  Icons.Rounded.Dashboard),
-    Approval("审批",   Icons.Rounded.PlaylistAddCheck),
-    Courses("课程",    Icons.Rounded.Class),
-    Users("用户",      Icons.Rounded.Group),
-    Profile("我的",    Icons.Rounded.Person),
+enum class AdminTab(@StringRes val titleRes: Int, val icon: ImageVector) {
+    Dashboard(R.string.tab_dashboard, Icons.Rounded.Dashboard),
+    Approval(R.string.tab_approval, Icons.Rounded.PlaylistAddCheck),
+    Courses(R.string.tab_courses, Icons.Rounded.Class),
+    Users(R.string.tab_users, Icons.Rounded.Group),
+    Profile(R.string.tab_profile, Icons.Rounded.Person),
 }
 
 @Composable
@@ -44,26 +47,16 @@ fun AdminMainScaffold(
     session: SessionViewModel = hiltViewModel(),
 ) {
     var tab by rememberSaveable { mutableStateOf(AdminTab.Dashboard) }
+    val tabs = remember {
+        AdminTab.values().map { AppBottomTab(titleRes = it.titleRes, icon = it.icon) }
+    }
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(tonalElevation = 8.dp) {
-                AdminTab.values().forEach { item ->
-                    NavigationBarItem(
-                        selected = tab == item,
-                        onClick = { tab = item },
-                        icon = { Icon(item.icon, null) },
-                        label = { Text(item.title) },
-                    )
-                }
-            }
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
+    RoleMainScaffold(
+        tabs = tabs,
+        selectedIndex = tab.ordinal,
+        onSelectTab = { tab = AdminTab.values()[it] },
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             AnimatedContent(
                 targetState = tab,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },

@@ -17,17 +17,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.annotation.StringRes
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.cen.feedback.R
 import com.cen.feedback.data.model.*
 import com.cen.feedback.ui.components.*
 import com.cen.feedback.ui.nav.Routes
@@ -35,9 +37,13 @@ import com.cen.feedback.ui.theme.*
 import java.io.File
 import java.io.FileOutputStream
 
-private enum class CourseTab(val title: String) {
-    Overview("概览"), Resources("资料"), Assignments("作业"),
-    Questionnaires("问卷"), Qa("问答"), Reviews("课评"),
+private enum class CourseTab(@StringRes val titleRes: Int) {
+    Overview(R.string.course_tab_overview),
+    Resources(R.string.course_tab_resources),
+    Assignments(R.string.course_tab_assignments),
+    Questionnaires(R.string.course_tab_questionnaires),
+    Qa(R.string.course_tab_qa),
+    Reviews(R.string.course_tab_reviews),
 }
 
 @Composable
@@ -52,12 +58,38 @@ fun CourseDetailScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            CourseHeader(s.course, onBack = { navController.popBackStack() }) {
-                navController.navigate(Routes.rateTeacher(courseId, s.course?.teacherId ?: 0L))
-            }
+            val c = s.course
+            val semLine = c?.semester?.let { stringResource(R.string.format_semester, it) }
+            CourseDetailHero(
+                title = c?.name ?: stringResource(R.string.course_default_name),
+                metaLine = listOfNotNull(
+                    c?.code,
+                    c?.academicYear,
+                    semLine,
+                    c?.location,
+                ).joinToString(" · "),
+                description = c?.description?.takeIf { !it.isNullOrBlank() },
+                onBack = { navController.popBackStack() },
+                backContentDescription = stringResource(R.string.cd_back),
+                colors = listOf(Primary600, Primary400),
+                trailing = {
+                    TextButton(
+                        onClick = {
+                            navController.navigate(
+                                Routes.rateTeacher(courseId, c?.teacherId ?: 0L),
+                            )
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
+                    ) {
+                        Icon(Icons.Rounded.RateReview, null)
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(R.string.action_rate_teacher))
+                    }
+                },
+            )
             ScrollableTabRow(
                 selectedTabIndex = tab.ordinal,
-                edgePadding = 12.dp,
+                edgePadding = AppDimens.scrollableTabEdgePadding,
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = Primary600,
                 divider = { HorizontalDivider() },
@@ -66,7 +98,7 @@ fun CourseDetailScreen(
                     Tab(
                         selected = tab == it,
                         onClick = { tab = it },
-                        text = { Text(it.title) },
+                        text = { Text(stringResource(it.titleRes)) },
                     )
                 }
             }
@@ -96,59 +128,6 @@ fun CourseDetailScreen(
     }
 }
 
-@Composable
-private fun CourseHeader(course: Courses?, onBack: () -> Unit, onRateTeacher: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Brush.linearGradient(listOf(Primary600, Primary400)))
-    ) {
-        Column(modifier = Modifier
-            .statusBarsPadding()
-            .padding(horizontal = 8.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, null, tint = Color.White) }
-                Spacer(Modifier.weight(1f))
-                TextButton(
-                    onClick = onRateTeacher,
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-                ) {
-                    Icon(Icons.Rounded.RateReview, null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("评价老师")
-                }
-            }
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                Text(
-                    course?.name ?: "课程",
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    listOfNotNull(
-                        course?.code,
-                        course?.academicYear,
-                        course?.semester?.let { "第 $it 学期" },
-                        course?.location,
-                    ).joinToString(" · "),
-                    color = Color.White.copy(alpha = 0.92f),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                if (!course?.description.isNullOrBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        course?.description.orEmpty(),
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        }
-    }
-}
-
 /* === 概览 === */
 @Composable
 private fun OverviewTab(s: CourseDetailUi, navController: NavController, courseId: Long) {
@@ -158,8 +137,8 @@ private fun OverviewTab(s: CourseDetailUi, navController: NavController, courseI
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(AppDimens.pagePadding),
+                horizontalArrangement = Arrangement.spacedBy(AppDimens.itemSpacing),
             ) {
                 MetricCard(
                     icon = Icons.Rounded.Description, label = "课程资料",
@@ -178,8 +157,8 @@ private fun OverviewTab(s: CourseDetailUi, navController: NavController, courseI
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = AppDimens.pagePadding),
+                horizontalArrangement = Arrangement.spacedBy(AppDimens.itemSpacing),
             ) {
                 MetricCard(
                     icon = Icons.Rounded.Quiz, label = "课程问卷",

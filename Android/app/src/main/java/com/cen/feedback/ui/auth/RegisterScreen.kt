@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -23,6 +24,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
+import com.cen.feedback.R
 import com.cen.feedback.ui.components.InlineError
 import com.cen.feedback.ui.components.PrimaryButton
 import com.cen.feedback.ui.theme.Pink500
@@ -61,19 +63,19 @@ fun RegisterScreen(
                     .padding(8.dp),
             ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Rounded.ArrowBack, "返回", tint = Color.White)
+                    Icon(Icons.Rounded.ArrowBack, stringResource(R.string.cd_back), tint = Color.White)
                 }
             }
             Spacer(Modifier.height(24.dp))
             Text(
-                "创建账号",
+                stringResource(R.string.register_title),
                 modifier = Modifier.padding(horizontal = 28.dp),
                 color = Color.White,
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "选择身份后注册，登录后将自动进入对应界面",
+                stringResource(R.string.register_subtitle),
                 modifier = Modifier.padding(horizontal = 28.dp),
                 color = Color.White.copy(alpha = 0.85f),
             )
@@ -92,14 +94,14 @@ fun RegisterScreen(
                     RegisterRoleSwitcher(role = s.role, onRoleChange = vm::setRole)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "管理员账号不开放公开注册，请联系系统团队获取账号",
+                        stringResource(R.string.register_admin_hint),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = s.username, onValueChange = vm::setUsername,
-                        label = { Text("用户名") },
+                        label = { Text(stringResource(R.string.login_username)) },
                         leadingIcon = { Icon(Icons.Rounded.Person, null) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -108,7 +110,7 @@ fun RegisterScreen(
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = s.nickname, onValueChange = vm::setNickname,
-                        label = { Text("昵称") },
+                        label = { Text(stringResource(R.string.register_nickname)) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier.fillMaxWidth(),
@@ -116,7 +118,7 @@ fun RegisterScreen(
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = s.email, onValueChange = vm::setEmail,
-                        label = { Text("邮箱（可选）") },
+                        label = { Text(stringResource(R.string.register_email_optional)) },
                         leadingIcon = { Icon(Icons.Rounded.Email, null) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -125,7 +127,7 @@ fun RegisterScreen(
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = s.password, onValueChange = vm::setPassword,
-                        label = { Text("密码") },
+                        label = { Text(stringResource(R.string.login_password)) },
                         leadingIcon = { Icon(Icons.Rounded.Lock, null) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -134,7 +136,7 @@ fun RegisterScreen(
                     InlineError(s.error)
                     Spacer(Modifier.height(20.dp))
                     PrimaryButton(
-                        text = "注 册",
+                        text = stringResource(R.string.register_action),
                         onClick = { vm.register { } },
                         loading = s.loading,
                         modifier = Modifier.fillMaxWidth(),
@@ -156,7 +158,10 @@ fun RegisterScreen(
 /** 注册专用的角色切换器：仅允许 student / teacher，没有 admin 选项 */
 @Composable
 private fun RegisterRoleSwitcher(role: String, onRoleChange: (String) -> Unit) {
-    val options = listOf("student" to "学生", "teacher" to "教师")
+    val options = listOf(
+        "student" to R.string.role_student,
+        "teacher" to R.string.role_teacher,
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -164,7 +169,7 @@ private fun RegisterRoleSwitcher(role: String, onRoleChange: (String) -> Unit) {
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(4.dp),
     ) {
-        options.forEach { (value, label) ->
+        options.forEach { (value, labelRes) ->
             val selected = role == value
             val container = if (selected)
                 androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Primary600, Primary400))
@@ -183,7 +188,7 @@ private fun RegisterRoleSwitcher(role: String, onRoleChange: (String) -> Unit) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    label,
+                    stringResource(labelRes),
                     color = if (selected) androidx.compose.ui.graphics.Color.White
                             else MaterialTheme.colorScheme.onSurface,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,

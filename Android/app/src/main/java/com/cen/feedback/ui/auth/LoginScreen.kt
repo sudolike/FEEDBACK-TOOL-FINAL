@@ -36,9 +36,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.cen.feedback.R
 import com.cen.feedback.ui.components.InlineError
 import com.cen.feedback.ui.components.PrimaryButton
 import com.cen.feedback.ui.theme.Primary400
@@ -91,13 +93,13 @@ fun LoginScreen(
             }
             Spacer(Modifier.height(16.dp))
             Text(
-                "课评云 Feedback",
+                stringResource(R.string.login_brand),
                 color = Color.White,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "AI 驱动的课程反馈与教学协作平台",
+                stringResource(R.string.login_tagline),
                 color = Color.White.copy(alpha = 0.85f),
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -111,12 +113,17 @@ fun LoginScreen(
                 shadowElevation = 12.dp,
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
-                    Text("欢迎回来", style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold)
+                    Text(
+                        stringResource(R.string.login_welcome),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                     Spacer(Modifier.height(4.dp))
-                    Text("用同一个账号登录，体验为你定制的界面",
+                    Text(
+                        stringResource(R.string.login_welcome_hint),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Spacer(Modifier.height(20.dp))
 
                     RoleSwitcher(
@@ -128,7 +135,7 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = state.username,
                         onValueChange = vm::setUsername,
-                        label = { Text("用户名") },
+                        label = { Text(stringResource(R.string.login_username)) },
                         leadingIcon = { Icon(Icons.Rounded.Person, null) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -142,7 +149,7 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = state.password,
                         onValueChange = vm::setPassword,
-                        label = { Text("密码") },
+                        label = { Text(stringResource(R.string.login_password)) },
                         leadingIcon = { Icon(Icons.Rounded.Lock, null) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
@@ -166,7 +173,7 @@ fun LoginScreen(
 
                     Spacer(Modifier.height(20.dp))
                     PrimaryButton(
-                        text = "登 录",
+                        text = stringResource(R.string.login_action),
                         onClick = { vm.login {} },
                         loading = state.loading,
                         modifier = Modifier.fillMaxWidth(),
@@ -177,16 +184,20 @@ fun LoginScreen(
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("还没有账号？",
+                        Text(
+                            stringResource(R.string.login_no_account),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        TextButton(onClick = onRegister) { Text("立即注册") }
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        TextButton(onClick = onRegister) {
+                            Text(stringResource(R.string.login_register_now))
+                        }
                     }
                 }
             }
             Spacer(Modifier.height(40.dp))
             Text(
-                "© 课评云 · 让教学反馈成为成长的引擎",
+                stringResource(R.string.login_footer),
                 color = Color.White.copy(alpha = 0.7f),
                 style = MaterialTheme.typography.labelSmall,
             )
@@ -197,7 +208,11 @@ fun LoginScreen(
 
 @Composable
 fun RoleSwitcher(role: String, onRoleChange: (String) -> Unit) {
-    val options = listOf("student" to "学生", "teacher" to "教师", "admin" to "管理员")
+    val options = listOf(
+        "student" to R.string.role_student,
+        "teacher" to R.string.role_teacher,
+        "admin" to R.string.role_admin,
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -205,7 +220,7 @@ fun RoleSwitcher(role: String, onRoleChange: (String) -> Unit) {
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(4.dp),
     ) {
-        options.forEach { (value, label) ->
+        options.forEach { (value, labelRes) ->
             val selected = role == value
             val container = if (selected) Brush.horizontalGradient(listOf(Primary600, Primary400))
                             else Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
@@ -219,7 +234,7 @@ fun RoleSwitcher(role: String, onRoleChange: (String) -> Unit) {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    label,
+                    stringResource(labelRes),
                     color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 )
