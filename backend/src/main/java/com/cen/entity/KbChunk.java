@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -37,6 +38,13 @@ public class KbChunk implements Serializable {
     private String content;
     private String keywords;
     private Integer tokens;
+
+    /**
+     * 本地 embedding，CSV 形式存储。
+     * 仅用于后端检索，不返回给前端。
+     */
+    @JsonIgnore
+    private String embedding;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;

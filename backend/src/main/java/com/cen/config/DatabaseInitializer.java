@@ -44,6 +44,8 @@ public class DatabaseInitializer implements CommandLineRunner {
         safeExec("ALTER TABLE sys_courses ADD COLUMN reviewed_at DATETIME DEFAULT NULL",
                 "reviewed_at");
         safeExec("CREATE INDEX idx_status ON sys_courses(status)", "idx_status");
+        safeExec("ALTER TABLE sys_kb_chunk ADD COLUMN embedding LONGTEXT DEFAULT NULL",
+                "kb_chunk.embedding");
 
         // ---- 选课关系表（sys_course_students）扩展字段：申请/邀请工作流 ----
         safeExec("ALTER TABLE sys_course_students ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'approved'",

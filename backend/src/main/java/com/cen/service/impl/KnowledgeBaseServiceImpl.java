@@ -16,12 +16,13 @@ import java.util.stream.Collectors;
 
 /**
  * 简易 RAG 知识库实现：
- *   - 不依赖外部向量库；
- *   - 基于 MySQL ngram 全文索引 + LIKE 兜底；
+ *   - 不依赖外部向量库和外部 embedding API；
+ *   - 基于本地 embedding + cosine similarity 做主检索；
+ *   - MySQL ngram 全文索引 + LIKE 作为兜底；
  *   - 关键词从用户提问中通过简单的中英文分词得到。
  *
  * 优点：零运维、可在容器中一键起飞；
- * 缺点：相关性弱于向量检索，但对教学场景（评价/课程描述/资料标题）已足够。
+ * 缺点：本地 embedding 是轻量实现，语义能力弱于预训练向量模型。
  */
 @Slf4j
 @Service
@@ -31,6 +32,8 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
     private static final long DEMO_SUMMARY_ID = 910001L;
     private static final long DEMO_RECOMMEND_ID = 910002L;
     private static final long DEMO_DIFFICULTY_ID = 910003L;
+    private static final int EMBED_DIM = 256;
+    private static final double MIN_EMBED_SCORE = 0.08d;
 
     @Resource private KbChunkMapper kbChunkMapper;
     @Resource private CoursesMapper coursesMapper;
@@ -156,6 +159,7 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
         List<String> kws = tokenize(query);
         if (kws.isEmpty()) return Collections.emptyList();
 
+        List<KbChunk> embeddingHits = searchByEmbedding(query, courseId, topK);
         List<KbChunk> dbHits = Collections.emptyList();
 
         // 优先：MATCH AGAINST ngram 全文检索
@@ -175,10 +179,39 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
             dbHits = kbChunkMapper.searchByLike(kws, courseId, topK);
         }
         List<KbChunk> demoHits = searchHkuDemoExamples(query);
-        return mergeHits(demoHits, dbHits, topK);
+        return mergeHits(embeddingHits, mergeHits(demoHits, dbHits, topK), topK);
     }
 
     /* ===================== 工具方法 ===================== */
+
+    private List<KbChunk> searchByEmbedding(String query, Long courseId, int topK) {
+        float[] queryVector = embedText(query);
+        if (isZeroVector(queryVector)) return Collections.emptyList();
+
+        QueryWrapper<KbChunk> q = new QueryWrapper<>();
+        if (courseId != null) {
+            q.and(w -> w.eq("course_id", courseId).or().isNull("course_id"));
+        }
+        List<KbChunk> candidates = kbChunkMapper.selectList(q);
+        if (candidates.isEmpty()) return Collections.emptyList();
+
+        List<ScoredChunk> scored = new ArrayList<>();
+        for (KbChunk chunk : candidates) {
+            float[] chunkVector = parseVector(chunk.getEmbedding());
+            if (chunkVector == null) {
+                chunkVector = embedText(buildEmbeddingText(chunk.getTitle(), chunk.getContent()));
+            }
+            double score = cosine(queryVector, chunkVector);
+            if (score >= MIN_EMBED_SCORE) {
+                scored.add(new ScoredChunk(chunk, score));
+            }
+        }
+        scored.sort(Comparator.comparingDouble(ScoredChunk::getScore).reversed());
+        return scored.stream()
+                .limit(Math.max(1, topK))
+                .map(ScoredChunk::getChunk)
+                .collect(Collectors.toList());
+    }
 
     private void seedHkuDemoChunks() {
         for (KbChunk chunk : buildHkuDemoChunks()) {
@@ -248,6 +281,7 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
         chunk.setContent(content);
         chunk.setKeywords(String.join(" ", tokenize(title + " " + content)));
         chunk.setTokens(content == null ? 0 : content.length());
+        chunk.setEmbedding(serializeVector(embedText(buildEmbeddingText(title, content))));
         chunk.setCreatedAt(LocalDateTime.now());
         return chunk;
     }
@@ -297,6 +331,7 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
         qw.eq("source_type", sourceType).eq("source_id", sourceId);
         KbChunk exists = kbChunkMapper.selectOne(qw);
         String keywords = String.join(" ", tokenize(title + " " + content));
+        String embedding = serializeVector(embedText(buildEmbeddingText(title, content)));
         if (exists == null) {
             KbChunk c = new KbChunk();
             c.setSourceType(sourceType);
@@ -306,6 +341,7 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
             c.setContent(content);
             c.setKeywords(keywords);
             c.setTokens(content == null ? 0 : content.length());
+            c.setEmbedding(embedding);
             c.setCreatedAt(LocalDateTime.now());
             kbChunkMapper.insert(c);
         } else {
@@ -314,8 +350,128 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
             exists.setContent(content);
             exists.setKeywords(keywords);
             exists.setTokens(content == null ? 0 : content.length());
+            exists.setEmbedding(embedding);
             kbChunkMapper.updateById(exists);
         }
+    }
+
+    private String buildEmbeddingText(String title, String content) {
+        String safeTitle = safe(title);
+        String safeContent = safe(content);
+        // 标题重复一次，给短标题更多权重。
+        return safeTitle + "\n" + safeTitle + "\n" + safeContent;
+    }
+
+    private float[] embedText(String text) {
+        float[] vector = new float[EMBED_DIM];
+        List<String> parts = embeddingTokens(text);
+        if (parts.isEmpty()) return vector;
+
+        Map<String, Integer> tf = new HashMap<>();
+        for (String part : parts) {
+            tf.merge(part, 1, Integer::sum);
+        }
+        for (Map.Entry<String, Integer> entry : tf.entrySet()) {
+            int hash1 = entry.getKey().hashCode();
+            int hash2 = Integer.rotateLeft(hash1, 13) ^ 0x9e3779b9;
+            float weight = (float) (1.0d + Math.log(entry.getValue()));
+
+            addHashedWeight(vector, hash1, weight);
+            addHashedWeight(vector, hash2, weight * 0.5f);
+        }
+        normalize(vector);
+        return vector;
+    }
+
+    private void addHashedWeight(float[] vector, int hash, float weight) {
+        int index = Math.floorMod(hash, EMBED_DIM);
+        int sign = ((hash >>> 1) & 1) == 0 ? 1 : -1;
+        vector[index] += sign * weight;
+    }
+
+    private List<String> embeddingTokens(String text) {
+        if (text == null) return Collections.emptyList();
+        List<String> tokens = new ArrayList<>();
+        Matcher m = SPLIT.matcher(text);
+        for (String token : m.replaceAll(" ").split("\\s+")) {
+            if (token.length() < 2) continue;
+            if (token.matches("[A-Za-z0-9]+")) {
+                String lower = token.toLowerCase(Locale.ROOT);
+                tokens.add(lower);
+                if (lower.length() >= 4) {
+                    for (int i = 0; i + 3 <= lower.length(); i++) {
+                        tokens.add(lower.substring(i, i + 3));
+                    }
+                }
+            } else {
+                for (int i = 0; i + 2 <= token.length(); i++) {
+                    tokens.add(token.substring(i, i + 2));
+                }
+            }
+            if (tokens.size() > 256) break;
+        }
+        return tokens;
+    }
+
+    private void normalize(float[] vector) {
+        double norm = 0d;
+        for (float v : vector) {
+            norm += v * v;
+        }
+        if (norm <= 0d) return;
+        float scale = (float) (1.0d / Math.sqrt(norm));
+        for (int i = 0; i < vector.length; i++) {
+            vector[i] *= scale;
+        }
+    }
+
+    private boolean isZeroVector(float[] vector) {
+        for (float v : vector) {
+            if (Math.abs(v) > 1e-6f) return false;
+        }
+        return true;
+    }
+
+    private double cosine(float[] left, float[] right) {
+        if (left == null || right == null || left.length != right.length) return 0d;
+        double dot = 0d;
+        for (int i = 0; i < left.length; i++) {
+            dot += left[i] * right[i];
+        }
+        return dot;
+    }
+
+    private String serializeVector(float[] vector) {
+        if (vector == null || vector.length == 0) return null;
+        StringBuilder sb = new StringBuilder(vector.length * 8);
+        for (int i = 0; i < vector.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(vector[i]);
+        }
+        return sb.toString();
+    }
+
+    private float[] parseVector(String serialized) {
+        if (serialized == null || serialized.trim().isEmpty()) return null;
+        String[] parts = serialized.split(",");
+        if (parts.length != EMBED_DIM) return null;
+        float[] vector = new float[EMBED_DIM];
+        try {
+            for (int i = 0; i < parts.length; i++) {
+                vector[i] = Float.parseFloat(parts[i]);
+            }
+            return vector;
+        } catch (NumberFormatException e) {
+            log.warn("解析知识库 embedding 失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    @lombok.AllArgsConstructor
+    @lombok.Getter
+    private static class ScoredChunk {
+        private final KbChunk chunk;
+        private final double score;
     }
 
     private List<String> tokenize(String text) {
