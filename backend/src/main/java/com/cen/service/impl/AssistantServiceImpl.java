@@ -33,6 +33,11 @@ import java.util.stream.Collectors;
 @Service
 public class AssistantServiceImpl implements IAssistantService {
 
+    private static final String DEMO_SOURCE_TYPE = "demo_hku";
+    private static final long DEMO_SUMMARY_ID = 910001L;
+    private static final long DEMO_RECOMMEND_ID = 910002L;
+    private static final long DEMO_DIFFICULTY_ID = 910003L;
+
     @Value("${ai-api-key:}")
     private String apiKey;
 
@@ -86,19 +91,33 @@ public class AssistantServiceImpl implements IAssistantService {
 
         // 3) 调用通义千问
         String reply;
-        try {
-            GenerationParam param = GenerationParam.builder()
-                    .apiKey(apiKey)
-                    .model(model)
-                    .messages(messages)
-                    .resultFormat(GenerationParam.ResultFormat.MESSAGE)
-                    .topP(0.9)
-                    .build();
-            GenerationResult result = generation.call(param);
-            reply = result.getOutput().getChoices().get(0).getMessage().getContent();
-        } catch (Exception e) {
-            log.error("AI 调用失败", e);
-            reply = "AI 服务暂不可用，请稍后再试。错误信息：" + e.getMessage();
+        String demoFallbackReply = buildDemoFallbackReply(citations);
+        if (StrUtil.isBlank(apiKey)) {
+            reply = demoFallbackReply != null
+                    ? demoFallbackReply
+                    : "AI 服务暂不可用，请先配置 AI_API_KEY 后重试。";
+        } else {
+            try {
+                GenerationParam param = GenerationParam.builder()
+                        .apiKey(apiKey)
+                        .model(model)
+                        .messages(messages)
+                        .resultFormat(GenerationParam.ResultFormat.MESSAGE)
+                        .topP(0.9)
+                        .build();
+                GenerationResult result = generation.call(param);
+                reply = result.getOutput().getChoices().get(0).getMessage().getContent();
+                if (StrUtil.isBlank(reply)) {
+                    reply = demoFallbackReply != null
+                            ? demoFallbackReply
+                            : "AI 服务暂不可用，请稍后再试。";
+                }
+            } catch (Exception e) {
+                log.error("AI 调用失败", e);
+                reply = demoFallbackReply != null
+                        ? demoFallbackReply
+                        : "AI 服务暂不可用，请稍后再试。错误信息：" + e.getMessage();
+            }
         }
 
         // 4) 持久化对话
@@ -186,5 +205,33 @@ public class AssistantServiceImpl implements IAssistantService {
             case "assistant": return Role.ASSISTANT.getValue();
             default: return Role.USER.getValue();
         }
+    }
+
+    private String buildDemoFallbackReply(List<KbChunk> citations) {
+        if (citations == null || citations.isEmpty()) return null;
+        for (KbChunk citation : citations) {
+            if (!DEMO_SOURCE_TYPE.equals(citation.getSourceType()) || citation.getSourceId() == null) {
+                continue;
+            }
+            long sourceId = citation.getSourceId();
+            if (sourceId == DEMO_SUMMARY_ID) {
+                return "可以把 HKU GEOG7310 理解为一门 6 学分、偏应用导向的云计算课程，主题是把 cloud computing 用在 geospatial data analytics 上。[1]\n\n"
+                        + "基于知识库，这门课的核心覆盖 cloud concepts、platforms、services，以及 cloud architecture、data storage and retrieval、processing and analysis、visualization，还强调 hands-on cloud-based tools，以及部署 cloud-based geospatial data applications。[1]\n\n"
+                        + "如果从课程评价总结的角度看，根据知识库，它更适合对 GIS、空间数据、遥感或云平台结合感兴趣的学生；优点是实践性强、应用场景明确、项目感较强；如果缺少 geospatial data 或 cloud basics 基础，上手速度可能会偏慢。[1]";
+            }
+            if (sourceId == DEMO_RECOMMEND_ID) {
+                return "如果你在 HKU 想学云计算和数据分析，这三门课的定位可以这样看：[1]\n\n"
+                        + "GEOG7307 更偏 big data analytics，根据知识库，它更偏统计分析、建模、可视化、data fusion 和 data-mining 导向，适合想强化数据分析方法的同学。[1]\n"
+                        + "GEOG7310 更偏 geospatial application + cloud workflow，适合想把云平台能力用于空间数据分析与应用部署的同学。[1]\n"
+                        + "COMP7305 更偏 distributed systems / cloud stack，覆盖 SaaS、PaaS、IaaS、virtualization、Hadoop file system、MapReduce、Spark 和 Amazon EC2 deployment，适合想走系统和平台实现路线的同学。[1]\n\n"
+                        + "所以根据知识库的推荐结论：偏统计建模选 GEOG7307，偏空间数据云应用选 GEOG7310，偏集群与云系统实现选 COMP7305。[1]";
+            }
+            if (sourceId == DEMO_DIFFICULTY_ID) {
+                return "HKU COMP3230 可以按中高难度来理解，更适合已经有编程基础和系统基础的学生。[1]\n\n"
+                        + "知识库里的官方事实包括：它是 6 学分课程，先修要求是 COMP2113 或 COMP2123 或 ENGG1340；以及 COMP2120 或 ELEC2441。课程主题覆盖 operating system structures、process and thread、CPU scheduling、process synchronization、deadlocks、memory management、file systems、I/O systems、device driver 和 disk scheduling。[1]\n\n"
+                        + "从难点看，通常会卡在 concurrency、synchronization、virtual memory、deadlock 和 file-system reasoning。根据知识库，建议先补足编程和系统基础，再修这门课会更稳。[1]";
+            }
+        }
+        return null;
     }
 }

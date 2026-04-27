@@ -1,5 +1,6 @@
 package com.cen.config;
 
+import com.cen.service.IKnowledgeBaseService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -26,6 +27,9 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     @Resource
     private JdbcTemplate jdbcTemplate;
+
+    @Resource
+    private IKnowledgeBaseService knowledgeBaseService;
 
     @Override
     public void run(String... args) {
@@ -99,6 +103,13 @@ public class DatabaseInitializer implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.warn("[DB-Init] ensure built-in admins failed: {}", e.getMessage());
+        }
+
+        try {
+            int courses = knowledgeBaseService.rebuildAll();
+            log.info("[DB-Init] knowledge base rebuilt for {} course(s)", courses);
+        } catch (Exception e) {
+            log.warn("[DB-Init] knowledge base rebuild skipped: {}", e.getMessage());
         }
     }
 
