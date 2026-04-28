@@ -235,6 +235,25 @@ fun AppRoot(session: SessionViewModel = hiltViewModel()) {
             TeacherAssistantScreen(onBack = { navController.popBackStack() })
         }
 
+        /* === 媒体播放器（需求 13） === */
+        composable(
+            Routes.MEDIA_PLAYER_PATTERN,
+            arguments = listOf(
+                navArgument("url") { type = NavType.StringType; defaultValue = "" },
+                navArgument("title") { type = NavType.StringType; defaultValue = "" },
+            ),
+        ) { entry ->
+            val encoded = entry.arguments?.getString("url").orEmpty()
+            val encodedTitle = entry.arguments?.getString("title").orEmpty()
+            val url = java.net.URLDecoder.decode(encoded, "UTF-8")
+            val title = java.net.URLDecoder.decode(encodedTitle, "UTF-8")
+            com.cen.feedback.ui.common.MediaPlayerScreen(
+                url = url,
+                title = title.takeIf { it.isNotBlank() },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
         /* === 管理员端 === */
         composable(Routes.ADMIN_HOME) { AdminMainScaffold(navController) }
     }

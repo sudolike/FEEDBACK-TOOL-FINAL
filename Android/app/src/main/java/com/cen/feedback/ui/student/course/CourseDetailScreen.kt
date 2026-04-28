@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import androidx.navigation.NavController
 import com.cen.feedback.data.model.*
 import com.cen.feedback.ui.components.*
 import com.cen.feedback.ui.nav.Routes
+import com.cen.feedback.ui.common.isPlayableMedia
 import com.cen.feedback.ui.theme.*
 import java.io.File
 import java.io.FileOutputStream
@@ -60,19 +62,55 @@ fun CourseDetailScreen(
                 edgePadding = 12.dp,
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = Primary600,
+                indicator = { positions ->
+                    if (tab.ordinal < positions.size) {
+                        val pos = positions[tab.ordinal]
+                        Box(
+                            modifier = Modifier
+                                .tabIndicatorOffset(pos)
+                                .height(32.dp)
+                                .padding(horizontal = 8.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Primary100)
+                        )
+                    }
+                },
                 divider = { HorizontalDivider() },
             ) {
                 CourseTab.values().forEach {
                     Tab(
                         selected = tab == it,
                         onClick = { tab = it },
-                        text = { Text(it.title) },
+                        text = {
+                            Text(
+                                it.title,
+                                color = if (tab == it) Primary700
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = if (tab == it) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                        },
                     )
                 }
             }
             AnimatedContent(
                 targetState = tab,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                transitionSpec = {
+                    if (targetState.ordinal > initialState.ordinal) {
+                        (androidx.compose.animation.slideInHorizontally(
+                            animationSpec = androidx.compose.animation.core.tween(220),
+                        ) { it / 6 } + fadeIn()) togetherWith
+                            (androidx.compose.animation.slideOutHorizontally(
+                                animationSpec = androidx.compose.animation.core.tween(220),
+                            ) { -it / 6 } + fadeOut())
+                    } else {
+                        (androidx.compose.animation.slideInHorizontally(
+                            animationSpec = androidx.compose.animation.core.tween(220),
+                        ) { -it / 6 } + fadeIn()) togetherWith
+                            (androidx.compose.animation.slideOutHorizontally(
+                                animationSpec = androidx.compose.animation.core.tween(220),
+                            ) { it / 6 } + fadeOut())
+                    }
+                },
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -80,7 +118,7 @@ fun CourseDetailScreen(
             ) { current ->
                 when (current) {
                     CourseTab.Overview -> OverviewTab(s, navController, courseId)
-                    CourseTab.Resources -> ResourcesTab(s, vm)
+                    CourseTab.Resources -> ResourcesTab(s, vm, navController)
                     CourseTab.Assignments -> AssignmentsTab(s, navController)
                     CourseTab.Questionnaires -> QuestionnairesTab(s, navController, courseId)
                     CourseTab.Qa -> QaTab(courseId, navController)
@@ -209,7 +247,7 @@ private fun OverviewTab(s: CourseDetailUi, navController: NavController, courseI
 
 /* === 资料 === */
 @Composable
-private fun ResourcesTab(s: CourseDetailUi, vm: CourseDetailViewModel) {
+private fun ResourcesTab(s: CourseDetailUi, vm: CourseDetailViewModel, navController: NavController) {
     val ctx = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
@@ -241,7 +279,7 @@ private fun ResourcesTab(s: CourseDetailUi, vm: CourseDetailViewModel) {
                 modifier = Modifier.padding(top = 32.dp))
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(s.resources) { ResourceRow(it, onClick = {}) }
+                items(s.resources) { ResourceRowWithPlay(it, navController) }
             }
         }
     }
@@ -284,6 +322,72 @@ private fun ResourceRow(r: CourseResource, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            StatusChip(r.category ?: "other", color = Accent500)
+        }
+    }
+}
+
+@Composable
+private fun ResourceRowWithPlay(
+    r: CourseResource,
+    navController: NavController,
+) {
+    val playable = remember(r.fileUrl, r.fileName, r.fileType) {
+        r.fileUrl.isPlayableMedia() || r.fileName.isPlayableMedia()
+            || (r.fileType?.lowercase() in setOf("mp4", "mov", "mkv", "mp3", "m4a", "wav", "webm"))
+    }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 2.dp,
+    ) {
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Primary600.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    when ((r.fileType ?: "").lowercase()) {
+                        "pdf" -> Icons.Rounded.PictureAsPdf
+                        "mp4", "mov", "mkv", "webm" -> Icons.Rounded.PlayCircle
+                        "mp3", "m4a", "wav", "aac" -> Icons.Rounded.Audiotrack
+                        "ppt", "pptx" -> Icons.Rounded.Slideshow
+                        "doc", "docx" -> Icons.Rounded.Description
+                        else -> Icons.Rounded.InsertDriveFile
+                    }, null, tint = Primary600
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(r.title ?: r.fileName ?: "未命名", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "${r.fileType ?: ""} · ${(r.fileSize ?: 0) / 1024} KB",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (playable && !r.fileUrl.isNullOrBlank()) {
+                IconButton(onClick = {
+                    navController.navigate(
+                        Routes.mediaPlayer(
+                            url = r.fileUrl,
+                            title = r.title ?: r.fileName,
+                        )
+                    )
+                }) {
+                    Icon(
+                        Icons.Rounded.PlayCircleFilled, null,
+                        tint = Primary600,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
             }
             StatusChip(r.category ?: "other", color = Accent500)
         }

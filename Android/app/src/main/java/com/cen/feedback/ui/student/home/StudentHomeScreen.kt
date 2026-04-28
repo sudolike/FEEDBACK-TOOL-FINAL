@@ -16,20 +16,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.cen.feedback.R
 import com.cen.feedback.data.model.Courses
 import com.cen.feedback.data.model.QuestionnaireFullInfoDTO
-import com.cen.feedback.ui.components.GlassCard
+import com.cen.feedback.ui.components.EmptyStateAction
+import com.cen.feedback.ui.components.HomeHero
 import com.cen.feedback.ui.components.MetricCard
 import com.cen.feedback.ui.components.SectionTitle
 import com.cen.feedback.ui.components.StatusChip
+import com.cen.feedback.ui.components.rememberGreeting
 import com.cen.feedback.ui.nav.Routes
 import com.cen.feedback.ui.theme.Accent500
-import com.cen.feedback.ui.theme.Pink500
+import com.cen.feedback.ui.theme.GradientKind
 import com.cen.feedback.ui.theme.Primary400
 import com.cen.feedback.ui.theme.Primary600
 import com.cen.feedback.ui.theme.Slate900
@@ -46,16 +50,20 @@ fun StudentHomeScreen(
     vm: StudentHomeViewModel = hiltViewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
+    val pendingQ = s.questionnaires.count { it.status == 1 && it.hasSubmitted != true }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 96.dp),
     ) {
         item {
-            HeaderHero(
-                nickname = s.nickname,
-                courseCount = s.courses.size,
-                pendingQ = s.questionnaires.count { it.status == 1 && it.hasSubmitted != true },
+            HomeHero(
+                title = rememberGreeting(s.nickname),
+                subtitle = "今天已选 ${s.courses.size} 门课，${if (pendingQ > 0) "$pendingQ 份问卷待你完成" else "暂无待处理问卷"}",
+                kind = GradientKind.StudentHero,
+                tipIcon = Icons.Rounded.AutoAwesome,
+                tipText = stringResource(R.string.home_ai_tip),
+                onTipClick = { /* 点击提示条可交给外层 AI FAB 处理，此处保持轻交互 */ },
             )
         }
         item {
@@ -67,26 +75,29 @@ fun StudentHomeScreen(
             ) {
                 MetricCard(
                     icon = Icons.Rounded.LibraryBooks,
-                    label = "我的课程",
+                    label = stringResource(R.string.home_metric_courses),
                     value = s.courses.size.toString(),
                     accent = Primary600,
                     modifier = Modifier.weight(1f),
                 )
                 MetricCard(
                     icon = Icons.Rounded.Quiz,
-                    label = "待填问卷",
-                    value = s.questionnaires.count { it.status == 1 && it.hasSubmitted != true }
-                        .toString(),
+                    label = stringResource(R.string.home_metric_pending),
+                    value = pendingQ.toString(),
                     accent = Warning500,
                     modifier = Modifier.weight(1f),
                 )
             }
         }
 
-        item { SectionTitle("进行中的问卷") }
+        item { SectionTitle(stringResource(R.string.home_ongoing_surveys)) }
         if (s.questionnaires.none { it.status == 1 }) {
             item {
-                EmptyHint("暂无进行中的问卷～\n好好享受当下的课堂吧。")
+                EmptyStateAction(
+                    icon = Icons.Rounded.Quiz,
+                    title = stringResource(R.string.home_ongoing_surveys),
+                    subtitle = stringResource(R.string.home_no_ongoing),
+                )
             }
         } else {
             item {
@@ -106,14 +117,22 @@ fun StudentHomeScreen(
         }
 
         item {
-            SectionTitle("我的课程", trailing = {
+            SectionTitle(stringResource(R.string.home_my_courses), trailing = {
                 TextButton(onClick = { onJumpTab(com.cen.feedback.ui.student.StudentTab.Courses) }) {
-                    Text("查看全部")
+                    Text(stringResource(R.string.btn_view_all))
                 }
             })
         }
         if (s.courses.isEmpty()) {
-            item { EmptyHint("还没有选课记录\n请联系教师将你加入课程。") }
+            item {
+                EmptyStateAction(
+                    icon = Icons.Rounded.LibraryBooks,
+                    title = stringResource(R.string.home_my_courses),
+                    subtitle = stringResource(R.string.home_no_courses),
+                    actionText = stringResource(R.string.course_discover),
+                    onAction = { navController.navigate(Routes.STUDENT_DISCOVER) },
+                )
+            }
         } else {
             items(s.courses.take(6)) { c ->
                 CourseRow(c) {
@@ -121,80 +140,6 @@ fun StudentHomeScreen(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun HeaderHero(nickname: String, courseCount: Int, pendingQ: Int) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Brush.linearGradient(listOf(Primary600, Primary400, Pink500.copy(alpha = 0.7f)))),
-    ) {
-        Column(
-            modifier = Modifier
-                .statusBarsPadding()
-                .padding(20.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Rounded.Person, null, tint = Color.White)
-                }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("早安，$nickname", color = Color.White,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "今天已选 $courseCount 门课，${if (pendingQ > 0) "$pendingQ 份问卷待你完成" else "暂无待处理问卷"}",
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            Surface(
-                color = Color.White.copy(alpha = 0.18f),
-                shape = RoundedCornerShape(20.dp),
-            ) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.AutoAwesome, null, tint = Color.White)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "试试 AI 助手：选课推荐 / 课程难度评估 / 课评摘要",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyHint(text: String) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        Text(
-            text,
-            modifier = Modifier.padding(20.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-        )
     }
 }
 

@@ -140,4 +140,7 @@ class QuestionnaireFillViewModel @Inject constructor(
     }
 
     fun consumeError() = _state.update { it.copy(error = null) }
+
+    /** UI 层设置错误信息（供 UI 上层做字段校验时使用） */
+    fun setError(msg: String?) = _state.update { it.copy(error = msg) }
 }

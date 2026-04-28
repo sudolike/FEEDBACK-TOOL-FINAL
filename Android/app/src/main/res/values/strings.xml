@@ -1,3 +1,123 @@
 <resources>
-    <string name="app_name">课评云 · Feedback</string>
+    <!-- App -->
+    <string name="app_name">FeedbackCloud</string>
+    <string name="app_brand">FeedbackCloud</string>
+    <string name="app_brand_sub">AI-powered course feedback &amp; teaching platform</string>
+
+    <!-- Common -->
+    <string name="btn_submit">Submit</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_confirm">Confirm</string>
+    <string name="btn_retry">Retry</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_back">Back</string>
+    <string name="btn_close">Close</string>
+    <string name="btn_send">Send</string>
+    <string name="btn_login">Log In</string>
+    <string name="btn_register">Sign Up</string>
+    <string name="btn_login_cta">LOG IN</string>
+    <string name="btn_register_cta">SIGN UP</string>
+    <string name="btn_view_all">View all</string>
+
+    <!-- Auth -->
+    <string name="auth_welcome_back">Welcome back</string>
+    <string name="auth_subtitle">One account, tailored UI per role</string>
+    <string name="auth_username">Username</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_nickname">Nickname</string>
+    <string name="auth_email">Email (optional)</string>
+    <string name="auth_role_student">Student</string>
+    <string name="auth_role_teacher">Teacher</string>
+    <string name="auth_role_admin">Admin</string>
+    <string name="auth_no_account">Don\'t have an account?</string>
+    <string name="auth_register_now">Sign up</string>
+    <string name="auth_create_account">Create account</string>
+    <string name="auth_register_sub">Pick a role, and we\'ll route you to the right UI after login</string>
+    <string name="auth_admin_closed">Admin accounts are not open for public registration.</string>
+    <string name="auth_footer">© FeedbackCloud · Feedback fuels growth</string>
+
+    <!-- Tabs (Student) -->
+    <string name="tab_home">Home</string>
+    <string name="tab_courses">Courses</string>
+    <string name="tab_questionnaires">Surveys</string>
+    <string name="tab_calendar">Calendar</string>
+    <string name="tab_profile">Me</string>
+    <!-- Tabs (Teacher) -->
+    <string name="tab_dashboard">Dashboard</string>
+    <string name="tab_analysis">Insights</string>
+    <!-- Tabs (Admin) -->
+    <string name="tab_approval">Approval</string>
+    <string name="tab_users">Users</string>
+
+    <!-- Home -->
+    <string name="home_ai_tip">Try AI: course recommendations · difficulty assessment · review summary</string>
+    <string name="home_my_courses">My Courses</string>
+    <string name="home_ongoing_surveys">Ongoing surveys</string>
+    <string name="home_pending_surveys">Pending surveys</string>
+    <string name="home_no_ongoing">No ongoing surveys — enjoy the class.</string>
+    <string name="home_no_courses">No enrolled courses yet. Ask your teacher to add you.</string>
+    <string name="home_metric_courses">My Courses</string>
+    <string name="home_metric_pending">Pending</string>
+
+    <!-- Questionnaire -->
+    <string name="quest_title_fill">Fill Survey</string>
+    <string name="quest_title_readonly">View Response</string>
+    <string name="quest_submit_anonymous">Submit anonymously</string>
+    <string name="quest_privacy_hint">Teachers only see anonymous aggregated results; your name is hidden.</string>
+    <string name="quest_already_submitted">You have already submitted this survey</string>
+    <string name="quest_empty_title">No questions</string>
+    <string name="quest_empty_subtitle">Please contact the teacher to check the survey configuration.</string>
+    <string name="quest_progress_format">Answered %1$d of %2$d</string>
+    <string name="quest_required_missing">Question %1$d is required.</string>
+    <string name="quest_rating_hint_1">Poor</string>
+    <string name="quest_rating_hint_2">Below average</string>
+    <string name="quest_rating_hint_3">Average</string>
+    <string name="quest_rating_hint_4">Good</string>
+    <string name="quest_rating_hint_5">Excellent</string>
+
+    <!-- Course -->
+    <string name="course_discover">Discover</string>
+    <string name="course_detail_overview">Overview</string>
+    <string name="course_detail_resources">Resources</string>
+    <string name="course_detail_assignments">Assignments</string>
+    <string name="course_detail_surveys">Surveys</string>
+    <string name="course_detail_qa">Q&amp;A</string>
+    <string name="course_detail_reviews">Reviews</string>
+
+    <!-- AI -->
+    <string name="ai_title">AI Assistant</string>
+    <string name="ai_subtitle">Powered by course-aware RAG retrieval</string>
+    <string name="ai_welcome">Hi! I\'m your learning assistant ✨</string>
+    <string name="ai_welcome_sub">I can summarize reviews, recommend courses, or rate difficulty.</string>
+    <string name="ai_placeholder">Ask me anything…</string>
+    <string name="ai_stop_generating">Stop generating</string>
+    <string name="ai_regenerate">Regenerate</string>
+    <string name="ai_copy">Copy</string>
+    <string name="ai_report">Report</string>
+    <string name="ai_skip_typing">Skip animation</string>
+    <string name="ai_sources">Sources</string>
+
+    <!-- Media -->
+    <string name="media_title">Preview</string>
+    <string name="media_cannot_play">Cannot play this media.</string>
+    <string name="media_open_download">Open download</string>
+    <string name="media_play">Play</string>
+
+    <!-- Empty / Error -->
+    <string name="empty_default">Nothing here yet</string>
+    <string name="error_default_title">Something went wrong</string>
+    <string name="error_network">Please check your network and try again.</string>
+
+    <!-- Admin reject reason -->
+    <string name="admin_reject_reason">Rejection reason</string>
+
+    <!-- Plurals -->
+    <plurals name="course_count">
+        <item quantity="one">%d course</item>
+        <item quantity="other">%d courses</item>
+    </plurals>
+    <plurals name="survey_count">
+        <item quantity="one">%d survey</item>
+        <item quantity="other">%d surveys</item>
+    </plurals>
 </resources>

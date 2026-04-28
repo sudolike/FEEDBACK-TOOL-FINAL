@@ -5,7 +5,6 @@ import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -16,17 +15,23 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Send
+import androidx.compose.material.icons.rounded.Source
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -35,16 +40,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import com.cen.feedback.R
 import com.cen.feedback.ui.theme.Pink500
 import com.cen.feedback.ui.theme.Primary400
 import com.cen.feedback.ui.theme.Primary600
 import com.cen.feedback.ui.theme.Slate900
 
-/* === 一条消息的轻量数据 === */
-data class AiMsg(val role: String, val text: String)
+/* === 一条消息的轻量数据 ===
+ * sources 为 RAG 引用来源，可为空
+ */
+data class AiMsg(
+    val role: String,
+    val text: String,
+    val sources: List<String> = emptyList(),
+)
 
 /**
  * 学生端浮动 AI 助手按钮 + 弹出聊天面板。
@@ -68,11 +87,18 @@ fun AiAssistantFab(
         AnimatedVisibility(!open, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
             PulsingFab(onClick = { open = true })
         }
-        // 弹出面板
+        // 弹出面板 —— 需求 8 验收点 1：从 FAB 位置放大展开
         AnimatedVisibility(
             open,
-            enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
+            enter = scaleIn(
+                initialScale = 0.3f,
+                transformOrigin = TransformOrigin(1f, 1f),
+                animationSpec = spring(stiffness = Spring.StiffnessMedium),
+            ) + fadeIn() + slideInVertically(initialOffsetY = { it / 4 }),
+            exit = scaleOut(
+                targetScale = 0.3f,
+                transformOrigin = TransformOrigin(1f, 1f),
+            ) + fadeOut() + slideOutVertically(targetOffsetY = { it / 4 }),
         ) {
             AiPanel(
                 messages = messages,
@@ -117,9 +143,24 @@ private fun AiPanel(
 ) {
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    // 打字机跳过开关 —— 需求 11 验收点 3
+    var skipTyping by remember { mutableStateOf(false) }
+
+    // 记录上一次"是否在底部"
+    val atBottom = remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible >= info.totalItemsCount - 1
+        }
     }
+    LaunchedEffect(messages.size) {
+        // 需求 11 验收点 4：只有用户已停留在底部时才自动跟随
+        if (messages.isNotEmpty() && atBottom.value) {
+            listState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -149,12 +190,15 @@ private fun AiPanel(
                     }
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("AI 学习助手", color = Color.White, fontWeight = FontWeight.SemiBold)
-                        Text("基于课程数据 RAG 检索增强", color = Color.White.copy(alpha = 0.85f),
-                            style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(R.string.ai_title), color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            stringResource(R.string.ai_subtitle),
+                            color = Color.White.copy(alpha = 0.85f),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
                     }
                     IconButton(onClick = onClose) {
-                        Icon(Icons.Rounded.Close, "关闭", tint = Color.White)
+                        Icon(Icons.Rounded.Close, stringResource(R.string.btn_close), tint = Color.White)
                     }
                 }
             }
@@ -169,13 +213,17 @@ private fun AiPanel(
                 if (messages.isEmpty()) {
                     item {
                         Column(modifier = Modifier.padding(20.dp)) {
-                            Text("Hi～我是你的学习助手 ✨",
+                            Text(
+                                stringResource(R.string.ai_welcome),
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold)
+                                fontWeight = FontWeight.SemiBold,
+                            )
                             Spacer(Modifier.height(6.dp))
-                            Text("我可以帮你总结课程口碑、推荐选课方向，或评估课程难度。",
+                            Text(
+                                stringResource(R.string.ai_welcome_sub),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium)
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                     }
                     item {
@@ -192,7 +240,15 @@ private fun AiPanel(
                         }
                     }
                 } else {
-                    items(messages) { MsgBubble(it) }
+                    items(messages) { msg ->
+                        MsgBubble(
+                            m = msg,
+                            // 只有最后一条 assistant 消息走打字机
+                            isLastAssistant = (msg === messages.lastOrNull()
+                                    && msg.role == "assistant" && !sending),
+                            skipTyping = skipTyping,
+                        )
+                    }
                     if (sending) item { TypingIndicator() }
                 }
             }
@@ -211,7 +267,7 @@ private fun AiPanel(
                         value = input,
                         onValueChange = { input = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("问我点什么…") },
+                        placeholder = { Text(stringResource(R.string.ai_placeholder)) },
                         shape = RoundedCornerShape(20.dp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         maxLines = 4,
@@ -221,9 +277,17 @@ private fun AiPanel(
                     val sendScale by animateFloatAsStatePublic(if (canSend) 1f else 0.9f)
                     IconButton(
                         onClick = {
+                            if (sending) {
+                                // 需求 8 验收点 4：发送中点击 → 跳过打字机动画
+                                skipTyping = true
+                                return@IconButton
+                            }
                             val text = input.trim()
-                            if (text.isNotEmpty() && !sending) {
+                            if (text.isNotEmpty()) {
+                                // 发送新消息前，让上一个打字机立即完成
+                                skipTyping = true
                                 onSend(text); input = ""
+                                skipTyping = false
                             }
                         },
                         modifier = Modifier
@@ -232,13 +296,18 @@ private fun AiPanel(
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
-                                    if (canSend) listOf(Primary600, Pink500)
+                                    if (canSend || sending) listOf(Primary600, Pink500)
                                     else listOf(Color.Gray, Color.Gray)
                                 )
                             ),
-                        enabled = canSend,
+                        enabled = canSend || sending,
                     ) {
-                        Icon(Icons.Rounded.Send, "发送", tint = Color.White)
+                        Icon(
+                            if (sending) Icons.Rounded.Stop else Icons.Rounded.Send,
+                            if (sending) stringResource(R.string.ai_stop_generating)
+                            else stringResource(R.string.btn_send),
+                            tint = Color.White,
+                        )
                     }
                 }
             }
@@ -247,31 +316,106 @@ private fun AiPanel(
 }
 
 @Composable
-private fun MsgBubble(m: AiMsg) {
+private fun MsgBubble(
+    m: AiMsg,
+    isLastAssistant: Boolean = false,
+    skipTyping: Boolean = false,
+) {
     val isUser = m.role == "user"
+    val clipboard = LocalClipboardManager.current
+    val haptic = LocalHapticFeedback.current
+    var showMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
     ) {
         val bg = if (isUser) Primary600 else MaterialTheme.colorScheme.surfaceVariant
         val fg = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface
-        Surface(
-            shape = RoundedCornerShape(
-                topStart = 18.dp, topEnd = 18.dp,
-                bottomStart = if (isUser) 18.dp else 4.dp,
-                bottomEnd = if (isUser) 4.dp else 18.dp,
-            ),
-            color = bg,
+        Column(
             modifier = Modifier
                 .padding(horizontal = 4.dp)
                 .widthIn(max = 280.dp),
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
         ) {
-            Text(
-                m.text,
-                color = fg,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Surface(
+                shape = RoundedCornerShape(
+                    topStart = 18.dp, topEnd = 18.dp,
+                    bottomStart = if (isUser) 18.dp else 4.dp,
+                    bottomEnd = if (isUser) 4.dp else 18.dp,
+                ),
+                color = bg,
+                modifier = Modifier
+                    .combinedClickable(
+                        onClick = { /* 单击无动作，预留 */ },
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showMenu = true
+                        },
+                    ),
+            ) {
+                if (isLastAssistant) {
+                    TypewriterText(
+                        fullText = m.text,
+                        color = fg,
+                        style = MaterialTheme.typography.bodyMedium,
+                        skip = skipTyping,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    )
+                } else {
+                    Text(
+                        m.text,
+                        color = fg,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+
+            // 长按菜单
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.ai_copy)) },
+                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) },
+                    onClick = {
+                        clipboard.setText(AnnotatedString(m.text))
+                        showMenu = false
+                    },
+                )
+            }
+
+            // RAG 引用 chip —— 需求 8 验收点 2
+            if (!isUser && m.sources.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(end = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.Source, null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    m.sources.take(6).forEach { src ->
+                        AssistChip(
+                            onClick = { /* 可展开详情，留待业务接入 */ },
+                            label = {
+                                Text(
+                                    src,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                )
+                            },
+                            modifier = Modifier.heightIn(min = 24.dp),
+                        )
+                    }
+                }
+            }
         }
     }
 }

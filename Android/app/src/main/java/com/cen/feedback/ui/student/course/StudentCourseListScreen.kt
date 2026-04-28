@@ -22,7 +22,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.cen.feedback.data.model.StudentEnrollmentRow
-import com.cen.feedback.ui.components.EmptyState
+import com.cen.feedback.ui.components.EmptyStateAction
 import com.cen.feedback.ui.components.GradientTopBar
 import com.cen.feedback.ui.components.SectionTitle
 import com.cen.feedback.ui.components.StatusChip
@@ -117,10 +117,12 @@ fun StudentCourseListScreen(
                     shimmerCards()
                 } else if (s.courses.isEmpty()) {
                     item {
-                        EmptyState(
+                        EmptyStateAction(
                             icon = Icons.Rounded.Inbox,
                             title = "尚未加入任何课程",
-                            subtitle = "可以点右上角\"发现课程\"申请加入，或等待教师邀请。",
+                            subtitle = "可以点\"发现课程\"申请加入，或等待教师邀请。",
+                            actionText = "发现课程",
+                            onAction = { navController.navigate(Routes.STUDENT_DISCOVER) },
                         )
                     }
                 } else {

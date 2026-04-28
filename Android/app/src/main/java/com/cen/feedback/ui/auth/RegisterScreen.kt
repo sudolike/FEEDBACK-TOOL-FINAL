@@ -1,28 +1,37 @@
 package com.cen.feedback.ui.auth
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
+import com.cen.feedback.R
+import com.cen.feedback.ui.components.GradientTopBar
 import com.cen.feedback.ui.components.InlineError
 import com.cen.feedback.ui.components.PrimaryButton
 import com.cen.feedback.ui.theme.Pink500
@@ -37,6 +46,11 @@ fun RegisterScreen(
     vm: AuthViewModel = hiltViewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
+    val nicknameFocus = remember { FocusRequester() }
+    val emailFocus = remember { FocusRequester() }
+    val passwordFocus = remember { FocusRequester() }
+
     LaunchedEffect(Unit) {
         // 进入注册页后，强制重置角色为 student，避免误用 admin
         if (s.role !in listOf("student", "teacher")) vm.setRole("student")
@@ -52,30 +66,18 @@ fun RegisterScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .systemBarsPadding(),
+                .verticalScroll(rememberScrollState()),
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(8.dp),
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.Rounded.ArrowBack, "返回", tint = Color.White)
-                }
-            }
-            Spacer(Modifier.height(24.dp))
-            Text(
-                "创建账号",
-                modifier = Modifier.padding(horizontal = 28.dp),
-                color = Color.White,
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
+            // 复用 GradientTopBar 保持与登录页视觉语言统一（需求 3 验收点 5）
+            GradientTopBar(
+                title = stringResource(R.string.auth_create_account),
+                onBack = onBack,
             )
+            Spacer(Modifier.height(12.dp))
             Text(
-                "选择身份后注册，登录后将自动进入对应界面",
+                stringResource(R.string.auth_register_sub),
                 modifier = Modifier.padding(horizontal = 28.dp),
-                color = Color.White.copy(alpha = 0.85f),
+                color = Color.White.copy(alpha = 0.9f),
             )
             Spacer(Modifier.height(28.dp))
 
@@ -92,50 +94,83 @@ fun RegisterScreen(
                     RegisterRoleSwitcher(role = s.role, onRoleChange = vm::setRole)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "管理员账号不开放公开注册，请联系系统团队获取账号",
+                        stringResource(R.string.auth_admin_closed),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = s.username, onValueChange = vm::setUsername,
-                        label = { Text("用户名") },
+                        label = { Text(stringResource(R.string.auth_username)) },
                         leadingIcon = { Icon(Icons.Rounded.Person, null) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(onNext = {
+                            nicknameFocus.requestFocus()
+                        }),
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = s.nickname, onValueChange = vm::setNickname,
-                        label = { Text("昵称") },
+                        label = { Text(stringResource(R.string.auth_nickname)) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(onNext = {
+                            emailFocus.requestFocus()
+                        }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(nicknameFocus),
                     )
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = s.email, onValueChange = vm::setEmail,
-                        label = { Text("邮箱（可选）") },
+                        label = { Text(stringResource(R.string.auth_email)) },
                         leadingIcon = { Icon(Icons.Rounded.Email, null) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next,
+                        ),
+                        keyboardActions = KeyboardActions(onNext = {
+                            passwordFocus.requestFocus()
+                        }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(emailFocus),
                     )
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = s.password, onValueChange = vm::setPassword,
-                        label = { Text("密码") },
+                        label = { Text(stringResource(R.string.auth_password)) },
                         leadingIcon = { Icon(Icons.Rounded.Lock, null) },
                         singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
                         shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done,
+                        ),
+                        keyboardActions = KeyboardActions(onDone = {
+                            focusManager.clearFocus()
+                            vm.register { }
+                        }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(passwordFocus),
                     )
                     InlineError(s.error)
                     Spacer(Modifier.height(20.dp))
                     PrimaryButton(
-                        text = "注 册",
-                        onClick = { vm.register { } },
+                        text = stringResource(R.string.btn_register_cta),
+                        onClick = {
+                            focusManager.clearFocus()
+                            vm.register { }
+                        },
                         loading = s.loading,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -156,7 +191,10 @@ fun RegisterScreen(
 /** 注册专用的角色切换器：仅允许 student / teacher，没有 admin 选项 */
 @Composable
 private fun RegisterRoleSwitcher(role: String, onRoleChange: (String) -> Unit) {
-    val options = listOf("student" to "学生", "teacher" to "教师")
+    val options = listOf(
+        "student" to stringResource(R.string.auth_role_student),
+        "teacher" to stringResource(R.string.auth_role_teacher),
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -167,12 +205,9 @@ private fun RegisterRoleSwitcher(role: String, onRoleChange: (String) -> Unit) {
         options.forEach { (value, label) ->
             val selected = role == value
             val container = if (selected)
-                androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Primary600, Primary400))
+                Brush.horizontalGradient(listOf(Primary600, Primary400))
             else
-                androidx.compose.ui.graphics.Brush.horizontalGradient(
-                    listOf(androidx.compose.ui.graphics.Color.Transparent,
-                           androidx.compose.ui.graphics.Color.Transparent)
-                )
+                Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -184,8 +219,7 @@ private fun RegisterRoleSwitcher(role: String, onRoleChange: (String) -> Unit) {
             ) {
                 Text(
                     label,
-                    color = if (selected) androidx.compose.ui.graphics.Color.White
-                            else MaterialTheme.colorScheme.onSurface,
+                    color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 )
             }

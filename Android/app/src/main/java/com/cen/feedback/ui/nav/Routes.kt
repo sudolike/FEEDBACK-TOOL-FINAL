@@ -65,6 +65,14 @@ object Routes {
     const val HELP_FEEDBACK = "common/help-feedback"
     const val TEACHER_ASSISTANT = "teacher/assistant"
 
+    /* === 媒体预览（需求 13 · 不改后端，仅 UI 壳） === */
+    fun mediaPlayer(url: String, title: String? = null): String {
+        val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
+        val encodedTitle = java.net.URLEncoder.encode(title.orEmpty(), "UTF-8")
+        return "common/media?url=$encodedUrl&title=$encodedTitle"
+    }
+    const val MEDIA_PLAYER_PATTERN = "common/media?url={url}&title={title}"
+
     /* === 管理员端 === */
     const val ADMIN_HOME = "admin/home"
 }
