@@ -1,6 +1,6 @@
-# 课评云 Feedback Android · UI 优化说明
+# UI 优化说明
 
-> 本文档描述了本次 UI 界面优化的范围、改动清单、使用方式与验证步骤。完成后**开箱即用**：用 Android Studio Hedgehog 打开当前 `Android/` 目录 → Gradle Sync → Run app，即可在模拟器（Android 7.0+）或真机直接体验优化效果。
+> 本文档描述了本次 UI 界面优化的范围、改动清单、使用方式与验证步骤。
 
 ---
 
@@ -125,7 +125,7 @@ if (resource.fileUrl.isPlayableMedia()) {
 
 ---
 
-## 5. 验证清单（人工回归）
+## 5. 验证清单
 
 启动 App 后建议按以下顺序验证：
 
