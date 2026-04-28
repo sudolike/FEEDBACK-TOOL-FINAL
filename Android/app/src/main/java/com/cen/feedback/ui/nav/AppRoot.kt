@@ -165,11 +165,16 @@ fun AppRoot(session: SessionViewModel = hiltViewModel()) {
         }
         composable(
             Routes.QUESTIONNAIRE_EDITOR_PATTERN,
-            arguments = listOf(navArgument("qId") { type = NavType.LongType }),
+            arguments = listOf(
+                navArgument("qId") { type = NavType.LongType },
+                navArgument("bindCourseId") { type = NavType.LongType },
+            ),
         ) { entry ->
             val qId = entry.arguments?.getLong("qId") ?: -1L
+            val bindCid = entry.arguments?.getLong("bindCourseId") ?: -1L
             QuestionnaireEditorScreen(
                 editingId = if (qId > 0) qId else null,
+                bindCourseId = if (bindCid > 0) bindCid else null,
                 onBack = { navController.popBackStack() },
             )
         }

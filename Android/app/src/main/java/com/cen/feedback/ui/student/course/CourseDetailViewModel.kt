@@ -5,16 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cen.feedback.data.model.*
 import com.cen.feedback.data.repo.FeedbackRepository
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedFactory
-import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 import javax.inject.Inject
 
 data class CourseDetailUi(
@@ -110,33 +108,43 @@ class CourseDetailViewModel @Inject constructor(
 
     /**
      * 上传资料：先 /file/upload 获取 url，再保存 CourseResource 元数据。
+     * 整个流程移到 IO 调度，避免大文件读写/网络阻塞主线程导致 ANR/OOM。
      */
     fun uploadResource(context: Context, file: File, title: String, category: String) = viewModelScope.launch {
         _state.update { it.copy(sending = true, error = null) }
         runCatching {
-            val url = repo.uploadFile(file)
-            val sid = repo.tokenStore.userId() ?: 0L
-            val role = repo.tokenStore.role() ?: "student"
-            repo.saveResource(
-                CourseResource(
-                    courseId = courseIdInternal,
-                    uploaderId = sid,
-                    uploaderRole = role,
-                    title = title.ifBlank { file.name },
-                    fileName = file.name,
-                    fileUrl = url,
-                    fileType = file.extension,
-                    fileSize = file.length(),
-                    category = category,
-                    description = "",
+            withContext(Dispatchers.IO) {
+                val url = repo.uploadFile(file)
+                val sid = repo.tokenStore.userId() ?: 0L
+                val role = repo.tokenStore.role() ?: "student"
+                repo.saveResource(
+                    CourseResource(
+                        courseId = courseIdInternal,
+                        uploaderId = sid,
+                        uploaderRole = role,
+                        title = title.ifBlank { file.name },
+                        fileName = file.name,
+                        fileUrl = url,
+                        fileType = file.extension,
+                        fileSize = file.length(),
+                        category = category,
+                        description = "",
+                    )
                 )
-            )
+                runCatching { file.delete() }
+            }
         }.onSuccess {
             _state.update { it.copy(sending = false, message = "上传成功") }
             refresh()
         }.onFailure { e ->
             _state.update { it.copy(sending = false, error = e.message ?: "上传失败") }
         }
+    }
+
+    /** 记录下载次数（点击文件预览时调用，失败静默） */
+    fun markDownload(id: Long?) {
+        if (id == null || id <= 0) return
+        viewModelScope.launch { runCatching { repo.resourceDownloadHit(id) } }
     }
 
     fun consumeMessage() = _state.update { it.copy(message = null) }

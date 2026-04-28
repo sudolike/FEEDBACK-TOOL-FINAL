@@ -15,7 +15,7 @@ public interface IQaService {
 
     QaReply createReply(QaReply reply);
 
-    List<Map<String, Object>> listPosts(Long courseId);
+    List<QaPost> listPosts(Long courseId);
 
     Map<String, Object> postDetail(Long postId);
 

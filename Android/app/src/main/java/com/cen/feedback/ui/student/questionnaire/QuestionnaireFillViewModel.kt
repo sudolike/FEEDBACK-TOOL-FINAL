@@ -55,8 +55,36 @@ class QuestionnaireFillViewModel @Inject constructor(
 
     private val listAdapter: JsonAdapter<List<QuestionItem>> =
         moshi.adapter(Types.newParameterizedType(List::class.java, QuestionItem::class.java))
-    private val mapAdapter: JsonAdapter<Map<String, Any?>> =
-        moshi.adapter(Types.newParameterizedType(Map::class.java, String::class.java, Any::class.java))
+
+    /** 用 org.json 手写序列化，避免 Moshi 对 Any? 类型 toJson 抛异常。 */
+    private fun encodeAnswers(answers: Map<String, Any?>): String {
+        val obj = org.json.JSONObject()
+        answers.forEach { (k, v) ->
+            when (v) {
+                null -> obj.put(k, org.json.JSONObject.NULL)
+                is List<*> -> obj.put(k, org.json.JSONArray(v))
+                is Number, is Boolean, is String -> obj.put(k, v)
+                else -> obj.put(k, v.toString())
+            }
+        }
+        return obj.toString()
+    }
+
+    /** 反序列化已提交答案：JSONObject → Map<String, Any?> */
+    private fun decodeAnswers(json: String?): Map<String, Any?> {
+        if (json.isNullOrBlank()) return emptyMap()
+        val o = runCatching { org.json.JSONObject(json) }.getOrNull() ?: return emptyMap()
+        val out = LinkedHashMap<String, Any?>()
+        o.keys().forEach { k ->
+            val v = o.opt(k)
+            out[k] = when (v) {
+                org.json.JSONObject.NULL, null -> null
+                is org.json.JSONArray -> List(v.length()) { v.opt(it) }
+                else -> v
+            }
+        }
+        return out
+    }
 
     private val _state = MutableStateFlow(QuestionnaireFillUi())
     val state = _state.asStateFlow()
@@ -77,9 +105,7 @@ class QuestionnaireFillViewModel @Inject constructor(
                 val q = resp?.questionnaire ?: pickFromList(courseId, qId)
                 val items = (q?.questions?.let { runCatching { listAdapter.fromJson(it) }.getOrNull() }
                     ?: emptyList())
-                val pre = if (resp?.answers != null) {
-                    runCatching { mapAdapter.fromJson(resp.answers) }.getOrNull() ?: emptyMap()
-                } else emptyMap()
+                val pre = decodeAnswers(resp?.answers)
                 QuestionnaireFillUi(
                     loading = false,
                     title = q?.title ?: "问卷",
@@ -121,7 +147,7 @@ class QuestionnaireFillViewModel @Inject constructor(
             _state.update { it.copy(sending = true, error = null) }
             runCatching {
                 val sid = repo.tokenStore.userId() ?: 0L
-                val json = mapAdapter.toJson(s.answers)
+                val json = encodeAnswers(s.answers)
                 repo.saveQuestionnaireResponse(
                     QuestionnaireResponses(
                         courseId = courseIdInternal,

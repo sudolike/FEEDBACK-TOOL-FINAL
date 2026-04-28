@@ -42,9 +42,14 @@ object NetworkModule {
         val cachedToken = tokenStore.tokenFlow.stateIn(scope, SharingStarted.Eagerly, null)
 
         return OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            // 大文件下载/视频流读取，最长 5 分钟
+            .readTimeout(5, TimeUnit.MINUTES)
+            // 大视频上传可能耗时较久，设为 10 分钟
+            .writeTimeout(10, TimeUnit.MINUTES)
+            // 整体调用上限，30 分钟（防止半永久挂起）
+            .callTimeout(30, TimeUnit.MINUTES)
+            .retryOnConnectionFailure(true)
             .addInterceptor { chain ->
                 val token = cachedToken.value
                 val req = chain.request().newBuilder()

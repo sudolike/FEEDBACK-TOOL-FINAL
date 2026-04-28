@@ -32,6 +32,8 @@ import com.cen.feedback.data.model.*
 import com.cen.feedback.ui.components.*
 import com.cen.feedback.ui.nav.Routes
 import com.cen.feedback.ui.theme.*
+import com.cen.feedback.util.FileUrlUtils
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 
@@ -152,6 +154,7 @@ private fun CourseHeader(course: Courses?, onBack: () -> Unit, onRateTeacher: ()
 /* === 概览 === */
 @Composable
 private fun OverviewTab(s: CourseDetailUi, navController: NavController, courseId: Long) {
+    val ctx = LocalContext.current
     LazyColumn(modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 96.dp)) {
         item {
@@ -197,7 +200,11 @@ private fun OverviewTab(s: CourseDetailUi, navController: NavController, courseI
         }
         item { SectionTitle("最近资料") }
         if (s.resources.isEmpty()) item { EmptyState(title = "尚无资料") }
-        else items(s.resources.take(3)) { ResourceRow(it, onClick = {}) }
+        else items(s.resources.take(3)) { r ->
+            ResourceRow(r, onClick = {
+                FileUrlUtils.openInExternal(ctx, r.fileUrl, r.fileType)
+            })
+        }
 
         item { SectionTitle("最近作业") }
         if (s.assignments.isEmpty()) item { EmptyState(title = "暂无作业") }
@@ -211,14 +218,20 @@ private fun OverviewTab(s: CourseDetailUi, navController: NavController, courseI
 @Composable
 private fun ResourcesTab(s: CourseDetailUi, vm: CourseDetailViewModel) {
     val ctx = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            val name = queryDisplayName(ctx, uri) ?: "upload-${System.currentTimeMillis()}"
-            val tmp = File(ctx.cacheDir, name)
-            ctx.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(tmp).use { output -> input.copyTo(output) }
+            // 大文件复制移到 IO 协程，避免主线程阻塞 / 大视频闪退
+            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val name = queryDisplayName(ctx, uri) ?: "upload-${System.currentTimeMillis()}"
+                    val tmp = File(ctx.cacheDir, name)
+                    ctx.contentResolver.openInputStream(uri)?.use { input ->
+                        FileOutputStream(tmp).use { output -> input.copyTo(output, bufferSize = 64 * 1024) }
+                    } ?: throw IllegalStateException("无法读取所选文件")
+                    vm.uploadResource(ctx, tmp, name, "lecture")
+                }
             }
-            vm.uploadResource(ctx, tmp, name, "lecture")
         }
     }
 
@@ -241,7 +254,12 @@ private fun ResourcesTab(s: CourseDetailUi, vm: CourseDetailViewModel) {
                 modifier = Modifier.padding(top = 32.dp))
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(s.resources) { ResourceRow(it, onClick = {}) }
+                items(s.resources) { r ->
+                    ResourceRow(r, onClick = {
+                        vm.markDownload(r.id)
+                        FileUrlUtils.openInExternal(ctx, r.fileUrl, r.fileType)
+                    })
+                }
             }
         }
     }

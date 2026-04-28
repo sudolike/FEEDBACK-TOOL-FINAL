@@ -5,12 +5,18 @@ server:
       charset: UTF-8
       enabled: true
       force: true
+  # Tomcat 容许大体积请求/连接慢传输，支持 ~1GB 视频上传
+  tomcat:
+    max-swallow-size: -1
+    max-http-form-post-size: -1
+    connection-timeout: 600000
 
 spring:
   servlet:
     multipart:
-      max-file-size: 200MB
-      max-request-size: 500MB
+      max-file-size: 1024MB
+      max-request-size: 1024MB
+      file-size-threshold: 10MB
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:feedback_1}?serverTimezone=GMT%2b8&useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true

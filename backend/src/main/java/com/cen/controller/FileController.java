@@ -91,7 +91,8 @@ public class FileController {
         if(!uploadFile.getParentFile().exists()){
             uploadFile.getParentFile().mkdirs();
         }
-        String url = "http://localhost:9091/file/"+fileUUID;
+        // 返回相对路径 /file/{uuid}，由客户端按 BASE_URL 拼接，避免 localhost 写死
+        String url = "/file/"+fileUUID;
         // 上传文件到磁盘
         file.transferTo(uploadFile);
         // 提取文化的md5
@@ -114,19 +115,58 @@ public class FileController {
         return url;
     }
     /*
-     * 文件下载接口
+     * 文件下载/预览接口
+     * 返回正确的 Content-Type 与 inline 头，让客户端可以直接预览图片/PDF/视频
      * */
     @GetMapping("/{fileUUID}")
     public void download(@PathVariable String fileUUID, HttpServletResponse response) throws IOException {
-        // 根据文件的唯一标识码获取文件
         File uploadFile = new File(fileUploadPath + fileUUID);
-        // 设置输出流的格式
+        if (!uploadFile.exists()) {
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        String ext = FileUtil.extName(fileUUID);
+        String mime = guessMime(ext);
+        response.setContentType(mime);
+        response.setContentLengthLong(uploadFile.length());
+        // inline：让客户端内联预览（图片/PDF/视频），下载时仍可右键保存
+        response.setHeader(
+                "Content-Disposition",
+                "inline; filename=\"" + URLEncoder.encode(fileUUID, "UTF-8") + "\""
+        );
+        // 允许跨域读取（与全局 CORS 配合）
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Cache-Control", "public, max-age=3600");
         ServletOutputStream os = response.getOutputStream();
-        response.setHeader("Content-Disposition","attachment;filename="+ URLEncoder.encode(fileUUID,"UTF-8"));
-        // 读取文件的字节流
-        os.write(FileUtil.readBytes(uploadFile));
-        os.flush();
-        os.close();
+        try (java.io.InputStream in = java.nio.file.Files.newInputStream(uploadFile.toPath())) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) > 0) os.write(buf, 0, n);
+            os.flush();
+        }
+    }
+
+    private String guessMime(String ext) {
+        if (ext == null) return "application/octet-stream";
+        switch (ext.toLowerCase()) {
+            case "pdf":  return "application/pdf";
+            case "png":  return "image/png";
+            case "jpg":
+            case "jpeg": return "image/jpeg";
+            case "gif":  return "image/gif";
+            case "webp": return "image/webp";
+            case "mp4":  return "video/mp4";
+            case "mov":  return "video/quicktime";
+            case "ppt":  return "application/vnd.ms-powerpoint";
+            case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "doc":  return "application/msword";
+            case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "xls":  return "application/vnd.ms-excel";
+            case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "txt":  return "text/plain;charset=UTF-8";
+            case "zip":  return "application/zip";
+            default:     return "application/octet-stream";
+        }
     }
     private FileD getFlieMd5(String md5){
         // 查询文件的md5是否存在

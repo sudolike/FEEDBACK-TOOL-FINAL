@@ -68,9 +68,11 @@ class QuestionnaireEditorViewModel @Inject constructor(
     private val _state = MutableStateFlow(QuestionnaireEditorUi())
     val state = _state.asStateFlow()
     private var editingId: Long? = null
+    private var bindCourseIdInternal: Long? = null
 
-    fun load(qId: Long?) {
+    fun load(qId: Long?, bindCourseId: Long? = null) {
         editingId = qId
+        bindCourseIdInternal = bindCourseId
         if (qId == null) {
             _state.value = QuestionnaireEditorUi(
                 items = listOf(EditorQuestion(id = UUID.randomUUID().toString(),
@@ -136,7 +138,7 @@ class QuestionnaireEditorViewModel @Inject constructor(
         _state.update { it.copy(sending = true, error = null) }
         runCatching {
             val tid = repo.tokenStore.userId() ?: 0L
-            repo.saveQuestionnaire(
+            val saved = repo.saveQuestionnaire(
                 Questionnaires(
                     id = editingId ?: 0L,
                     title = s.title,
@@ -145,8 +147,16 @@ class QuestionnaireEditorViewModel @Inject constructor(
                     questions = listAdapter.toJson(s.items),
                 )
             )
+            // 课内"新建问卷"：保存后自动绑定到课程并发布
+            val cid = bindCourseIdInternal
+            val newId = saved.id
+            if (cid != null && cid > 0 && editingId == null && newId > 0) {
+                runCatching { repo.bindQuestionnaires(cid, newId.toString()) }
+                runCatching { repo.publishQuestionnaire(cid, newId) }
+            }
         }.onSuccess {
-            _state.update { it.copy(sending = false, saved = true, message = "已保存") }
+            val tip = if (bindCourseIdInternal != null && editingId == null) "已发布到课程" else "已保存"
+            _state.update { it.copy(sending = false, saved = true, message = tip) }
         }.onFailure { e ->
             _state.update { it.copy(sending = false, error = e.message ?: "保存失败") }
         }
@@ -158,10 +168,11 @@ class QuestionnaireEditorViewModel @Inject constructor(
 @Composable
 fun QuestionnaireEditorScreen(
     editingId: Long?,
+    bindCourseId: Long? = null,
     onBack: () -> Unit,
     vm: QuestionnaireEditorViewModel = hiltViewModel(),
 ) {
-    LaunchedEffect(editingId) { vm.load(editingId) }
+    LaunchedEffect(editingId, bindCourseId) { vm.load(editingId, bindCourseId) }
     val s by vm.state.collectAsStateWithLifecycle()
     val ctx = LocalContext.current
 

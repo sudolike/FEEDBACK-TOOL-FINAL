@@ -189,7 +189,7 @@ interface ApiService {
     ): ApiResult<List<Questionnaires>>
 
     @POST("questionnaires/save")
-    suspend fun saveQuestionnaire(@Body q: Questionnaires): ApiResult<Any>
+    suspend fun saveQuestionnaire(@Body q: Questionnaires): ApiResult<Questionnaires>
 
     @POST("questionnaires/delete")
     suspend fun deleteQuestionnaire(@Body q: Questionnaires): ApiResult<Any>

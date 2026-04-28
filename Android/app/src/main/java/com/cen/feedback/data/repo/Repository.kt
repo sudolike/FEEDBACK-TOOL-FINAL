@@ -147,7 +147,7 @@ class FeedbackRepository @Inject constructor(
     suspend fun teacherQuestionnaires(teacherId: Long) =
         api.listQuestionnaires(teacherId).unwrap()
 
-    suspend fun saveQuestionnaire(q: Questionnaires) = api.saveQuestionnaire(q).unwrap()
+    suspend fun saveQuestionnaire(q: Questionnaires): Questionnaires = api.saveQuestionnaire(q).unwrap()
 
     suspend fun deleteQuestionnaire(q: Questionnaires) = api.deleteQuestionnaire(q).unwrap()
 

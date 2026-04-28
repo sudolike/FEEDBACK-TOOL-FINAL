@@ -49,23 +49,28 @@ public class QaServiceImpl implements IQaService {
     }
 
     @Override
-    public List<Map<String, Object>> listPosts(Long courseId) {
+    public List<QaPost> listPosts(Long courseId) {
         QueryWrapper<QaPost> qw = new QueryWrapper<>();
         qw.eq("course_id", courseId).orderByDesc("created_at");
         List<QaPost> posts = qaPostMapper.selectList(qw);
         if (posts.isEmpty()) return Collections.emptyList();
 
-        Set<Long> ids = posts.stream().map(QaPost::getAuthorId).collect(Collectors.toSet());
-        Map<Long, User> userMap = userMapper.selectBatchIds(ids).stream().collect(Collectors.toMap(User::getId, u -> u));
+        Set<Long> ids = posts.stream()
+                .map(QaPost::getAuthorId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, User> userMap = ids.isEmpty() ? Collections.emptyMap()
+                : userMapper.selectBatchIds(ids).stream()
+                        .collect(Collectors.toMap(User::getId, u -> u));
 
-        return posts.stream().map(p -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("post", p);
+        for (QaPost p : posts) {
             User u = userMap.get(p.getAuthorId());
-            m.put("authorName", u == null ? null : (u.getNickname() == null ? u.getUsername() : u.getNickname()));
-            m.put("authorAvatar", u == null ? null : u.getAvatarUrl());
-            return m;
-        }).collect(Collectors.toList());
+            if (u != null) {
+                p.setAuthorName(u.getNickname() == null ? u.getUsername() : u.getNickname());
+                p.setAuthorAvatar(u.getAvatarUrl());
+            }
+        }
+        return posts;
     }
 
     @Override
@@ -79,27 +84,30 @@ public class QaServiceImpl implements IQaService {
         List<QaReply> replies = qaReplyMapper.selectList(qw);
 
         Set<Long> uids = new HashSet<>();
-        uids.add(post.getAuthorId());
-        replies.forEach(r -> uids.add(r.getAuthorId()));
+        if (post.getAuthorId() != null) uids.add(post.getAuthorId());
+        replies.forEach(r -> { if (r.getAuthorId() != null) uids.add(r.getAuthorId()); });
         Map<Long, User> userMap = uids.isEmpty() ? Collections.emptyMap()
-                : userMapper.selectBatchIds(uids).stream().collect(Collectors.toMap(User::getId, u -> u));
+                : userMapper.selectBatchIds(uids).stream()
+                        .collect(Collectors.toMap(User::getId, u -> u));
 
+        // 注入作者信息到实体（@TableField(exist=false) 字段，仅序列化）
+        User pa = userMap.get(post.getAuthorId());
+        if (pa != null) {
+            post.setAuthorName(pa.getNickname() == null ? pa.getUsername() : pa.getNickname());
+            post.setAuthorAvatar(pa.getAvatarUrl());
+        }
+        for (QaReply r : replies) {
+            User u = userMap.get(r.getAuthorId());
+            if (u != null) {
+                r.setAuthorName(u.getNickname() == null ? u.getUsername() : u.getNickname());
+                r.setAuthorAvatar(u.getAvatarUrl());
+            }
+        }
+
+        // 返回结构与 Android QaPostDetail 一致：{post, replies}
         Map<String, Object> ret = new LinkedHashMap<>();
         ret.put("post", post);
-        User pa = userMap.get(post.getAuthorId());
-        ret.put("authorName", pa == null ? null : (pa.getNickname() == null ? pa.getUsername() : pa.getNickname()));
-        ret.put("authorAvatar", pa == null ? null : pa.getAvatarUrl());
-
-        List<Map<String, Object>> rls = new ArrayList<>();
-        for (QaReply r : replies) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("reply", r);
-            User u = userMap.get(r.getAuthorId());
-            m.put("authorName", u == null ? null : (u.getNickname() == null ? u.getUsername() : u.getNickname()));
-            m.put("authorAvatar", u == null ? null : u.getAvatarUrl());
-            rls.add(m);
-        }
-        ret.put("replies", rls);
+        ret.put("replies", replies);
         return ret;
     }
 

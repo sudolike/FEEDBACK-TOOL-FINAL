@@ -306,7 +306,12 @@ data class TeacherRatingStats(
 @JsonClass(generateAdapter = true)
 data class QaPost(
     val id: Long? = null,
-    val courseId: Long,
+    /**
+     * 后端 listPosts 返回时实体内字段固定存在；
+     * 但创建新帖时前端构造，因此保持非空 Long。
+     * （服务端始终下发 courseId）
+     */
+    val courseId: Long = 0L,
     val authorId: Long? = null,
     val authorRole: String? = null,
     val title: String? = null,
@@ -316,18 +321,22 @@ data class QaPost(
     val isResolved: Int? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
+    val authorName: String? = null,
+    val authorAvatar: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
 data class QaReply(
     val id: Long? = null,
-    val postId: Long,
+    val postId: Long = 0L,
     val authorId: Long? = null,
     val authorRole: String? = null,
     val content: String? = null,
     val parentId: Long? = null,
     val isAccepted: Int? = null,
     val createdAt: String? = null,
+    val authorName: String? = null,
+    val authorAvatar: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

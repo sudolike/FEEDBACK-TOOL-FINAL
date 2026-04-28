@@ -37,11 +37,14 @@ import com.cen.feedback.data.repo.FeedbackRepository
 import com.cen.feedback.ui.components.*
 import com.cen.feedback.ui.nav.Routes
 import com.cen.feedback.ui.theme.*
+import com.cen.feedback.util.FileUrlUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import javax.inject.Inject
@@ -108,21 +111,24 @@ class TeacherCourseDetailViewModel @Inject constructor(
     fun uploadResource(file: File, title: String, category: String) = viewModelScope.launch {
         _state.update { it.copy(sending = true) }
         runCatching {
-            val url = repo.uploadFile(file)
-            val tid = repo.tokenStore.userId() ?: 0L
-            repo.saveResource(
-                CourseResource(
-                    courseId = courseIdInternal,
-                    uploaderId = tid,
-                    uploaderRole = "teacher",
-                    title = title.ifBlank { file.name },
-                    fileName = file.name,
-                    fileUrl = url,
-                    fileType = file.extension,
-                    fileSize = file.length(),
-                    category = category,
+            withContext(Dispatchers.IO) {
+                val url = repo.uploadFile(file)
+                val tid = repo.tokenStore.userId() ?: 0L
+                repo.saveResource(
+                    CourseResource(
+                        courseId = courseIdInternal,
+                        uploaderId = tid,
+                        uploaderRole = "teacher",
+                        title = title.ifBlank { file.name },
+                        fileName = file.name,
+                        fileUrl = url,
+                        fileType = file.extension,
+                        fileSize = file.length(),
+                        category = category,
+                    )
                 )
-            )
+                runCatching { file.delete() }
+            }
         }.onSuccess { _state.update { it.copy(sending = false, message = "上传成功") }; refresh() }
          .onFailure { e -> _state.update { it.copy(sending = false, error = e.message) } }
     }
@@ -378,14 +384,20 @@ private fun OverviewTab(s: TeacherCourseDetailUi, navController: NavController) 
 @Composable
 private fun ResourcesTab(s: TeacherCourseDetailUi, vm: TeacherCourseDetailViewModel) {
     val ctx = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
-            val name = queryDisplayName(ctx, uri) ?: "upload-${System.currentTimeMillis()}"
-            val tmp = File(ctx.cacheDir, name)
-            ctx.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(tmp).use { output -> input.copyTo(output) }
+            // 大文件复制移到 IO 协程，避免主线程阻塞 / 大视频闪退
+            scope.launch(Dispatchers.IO) {
+                runCatching {
+                    val name = queryDisplayName(ctx, uri) ?: "upload-${System.currentTimeMillis()}"
+                    val tmp = File(ctx.cacheDir, name)
+                    ctx.contentResolver.openInputStream(uri)?.use { input ->
+                        FileOutputStream(tmp).use { output -> input.copyTo(output, bufferSize = 64 * 1024) }
+                    } ?: throw IllegalStateException("无法读取所选文件")
+                    vm.uploadResource(tmp, name, "lecture")
+                }
             }
-            vm.uploadResource(tmp, name, "lecture")
         }
     }
     Column(modifier = Modifier.fillMaxSize()) {
@@ -411,6 +423,7 @@ private fun ResourcesTab(s: TeacherCourseDetailUi, vm: TeacherCourseDetailViewMo
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 1.dp,
+                        onClick = { FileUrlUtils.openInExternal(ctx, r.fileUrl, r.fileType) },
                     ) {
                         Row(modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically) {
@@ -518,7 +531,7 @@ private fun QuestionnairesTab(
             PrimaryButton(
                 "新建问卷",
                 icon = Icons.Rounded.AddCircle,
-                onClick = { navController.navigate(Routes.questionnaireEditor(null)) },
+                onClick = { navController.navigate(Routes.questionnaireEditor(null, courseId)) },
                 modifier = Modifier.weight(1f),
             )
             SecondaryButton(

@@ -38,8 +38,14 @@ object Routes {
     fun teacherCourseDetail(courseId: Long) = "teacher/course/$courseId"
     const val TEACHER_COURSE_DETAIL_PATTERN = "teacher/course/{courseId}"
 
-    fun questionnaireEditor(qId: Long?) = if (qId == null) "teacher/q/editor/-1" else "teacher/q/editor/$qId"
-    const val QUESTIONNAIRE_EDITOR_PATTERN = "teacher/q/editor/{qId}"
+    /**
+     * 问卷编辑器路由：可选 bindCourseId（保存后自动绑定到该课程并发布）。
+     * - 仅编辑模板：questionnaireEditor(qId, null)
+     * - 课内新建并发布：questionnaireEditor(null, courseId)
+     */
+    fun questionnaireEditor(qId: Long?, bindCourseId: Long? = null) =
+        "teacher/q/editor/${qId ?: -1}/${bindCourseId ?: -1}"
+    const val QUESTIONNAIRE_EDITOR_PATTERN = "teacher/q/editor/{qId}/{bindCourseId}"
 
     fun teacherAnalysis(courseId: Long, qId: Long) = "teacher/analysis/$courseId/$qId"
     const val TEACHER_ANALYSIS_PATTERN = "teacher/analysis/{courseId}/{qId}"

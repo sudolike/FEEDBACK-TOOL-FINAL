@@ -42,10 +42,13 @@ public class QuestionnairesController {
     //新增或修改
     @PostMapping("/save")
     public Result save(@RequestBody Questionnaires questionnaires) {
-        // 使用saveOrUpdate方法保存或更新问卷数据
-        // 如果问卷对象的ID存在，则更新该问卷
-        // 如果问卷对象的ID不存在，则保存为新问卷
-        return Result.success(questionnairesService.saveOrUpdate(questionnaires));
+        // saveOrUpdate 会把自增 id 回填到 questionnaires
+        // 返回完整对象，前端需要新生成的 id 来做后续绑定/发布
+        if (questionnaires.getId() != null && questionnaires.getId() <= 0) {
+            questionnaires.setId(null);
+        }
+        questionnairesService.saveOrUpdate(questionnaires);
+        return Result.success(questionnaires);
     }
     //删除
     @PostMapping("/delete")
