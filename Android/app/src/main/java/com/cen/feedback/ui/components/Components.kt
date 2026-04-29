@@ -55,6 +55,8 @@ fun GradientBackground(
 
 /**
  * 通用胶囊按钮（点击有缩放反馈、按压加深）。
+ *
+ * loading == true 时压缩为圆形 loading（需求 10）。
  */
 @Composable
 fun PrimaryButton(
@@ -68,8 +70,10 @@ fun PrimaryButton(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.97f else 1f, label = "btn-scale")
+    // loading 时使用 IntrinsicSize.Min 压缩为圆形
+    val wrapModifier = if (loading) Modifier.width(52.dp) else modifier
     Surface(
-        modifier = modifier
+        modifier = wrapModifier
             .scale(scale)
             .height(52.dp),
         color = Color.Transparent,
@@ -86,7 +90,7 @@ fun PrimaryButton(
                 )
                 .clickable(
                     interactionSource = interaction,
-                    indication = rememberRipple(color = Color.White),
+                    indication = rememberRipple(color = Color.White.copy(alpha = 0.24f)),
                     enabled = enabled && !loading,
                     onClick = onClick
                 ),
@@ -393,13 +397,15 @@ fun InlineError(text: String?, modifier: Modifier = Modifier) {
 fun GradientTopBar(
     title: String,
     onBack: (() -> Unit)? = null,
+    gradientColors: List<Color>? = null,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    val colors = gradientColors ?: listOf(Primary600, Primary400)
     Surface(
         color = Color.Transparent,
         modifier = Modifier
             .fillMaxWidth()
-            .background(Brush.horizontalGradient(listOf(Primary600, Primary400))),
+            .background(Brush.horizontalGradient(colors)),
     ) {
         Row(
             modifier = Modifier

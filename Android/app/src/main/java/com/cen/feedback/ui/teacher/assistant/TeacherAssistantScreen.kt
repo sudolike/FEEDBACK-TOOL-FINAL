@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cen.feedback.ui.components.GradientTopBar
+import com.cen.feedback.ui.components.TypewriterText
 import com.cen.feedback.ui.student.ai.AiViewModel
 import com.cen.feedback.ui.theme.Primary400
 import com.cen.feedback.ui.theme.Primary600
@@ -99,6 +100,8 @@ fun TeacherAssistantScreen(
         ) {
             items(state.messages) { m ->
                 val isUser = m.role == "user"
+                val isLastAssistant =
+                    !isUser && m === state.messages.lastOrNull() && !state.sending
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
@@ -112,13 +115,23 @@ fun TeacherAssistantScreen(
                             bottomStart = if (isUser) 16.dp else 4.dp,
                         ),
                     ) {
-                        Text(
-                            m.text,
-                            modifier = Modifier
-                                .padding(12.dp)
-                                .widthIn(max = 280.dp),
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                        if (isLastAssistant) {
+                            TypewriterText(
+                                fullText = m.text,
+                                modifier = Modifier
+                                    .padding(12.dp)
+                                    .widthIn(max = 280.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        } else {
+                            Text(
+                                m.text,
+                                modifier = Modifier
+                                    .padding(12.dp)
+                                    .widthIn(max = 280.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                     }
                 }
             }

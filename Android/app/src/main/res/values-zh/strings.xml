@@ -1,0 +1,119 @@
+<resources>
+    <!-- App -->
+    <string name="app_name">课评云 · Feedback</string>
+    <string name="app_brand">课评云 Feedback</string>
+    <string name="app_brand_sub">AI 驱动的课程反馈与教学协作平台</string>
+
+    <!-- Common -->
+    <string name="btn_submit">提交</string>
+    <string name="btn_cancel">取消</string>
+    <string name="btn_confirm">确认</string>
+    <string name="btn_retry">重试</string>
+    <string name="btn_save">保存</string>
+    <string name="btn_back">返回</string>
+    <string name="btn_close">关闭</string>
+    <string name="btn_send">发送</string>
+    <string name="btn_login">登录</string>
+    <string name="btn_register">注册</string>
+    <string name="btn_login_cta">登 录</string>
+    <string name="btn_register_cta">注 册</string>
+    <string name="btn_view_all">查看全部</string>
+
+    <!-- Auth -->
+    <string name="auth_welcome_back">欢迎回来</string>
+    <string name="auth_subtitle">用同一个账号登录，体验为你定制的界面</string>
+    <string name="auth_username">用户名</string>
+    <string name="auth_password">密码</string>
+    <string name="auth_nickname">昵称</string>
+    <string name="auth_email">邮箱（可选）</string>
+    <string name="auth_role_student">学生</string>
+    <string name="auth_role_teacher">教师</string>
+    <string name="auth_role_admin">管理员</string>
+    <string name="auth_no_account">还没有账号？</string>
+    <string name="auth_register_now">立即注册</string>
+    <string name="auth_create_account">创建账号</string>
+    <string name="auth_register_sub">选择身份后注册，登录后将自动进入对应界面</string>
+    <string name="auth_admin_closed">管理员账号不开放公开注册，请联系系统团队获取账号</string>
+    <string name="auth_footer">© 课评云 · 让教学反馈成为成长的引擎</string>
+
+    <!-- Tabs -->
+    <string name="tab_home">首页</string>
+    <string name="tab_courses">课程</string>
+    <string name="tab_questionnaires">问卷</string>
+    <string name="tab_calendar">日历</string>
+    <string name="tab_profile">我的</string>
+    <string name="tab_dashboard">看板</string>
+    <string name="tab_analysis">分析</string>
+    <string name="tab_approval">审批</string>
+    <string name="tab_users">用户</string>
+
+    <!-- Home -->
+    <string name="home_ai_tip">试试 AI 助手：选课推荐 / 课程难度评估 / 课评摘要</string>
+    <string name="home_my_courses">我的课程</string>
+    <string name="home_ongoing_surveys">进行中的问卷</string>
+    <string name="home_pending_surveys">待填问卷</string>
+    <string name="home_no_ongoing">暂无进行中的问卷～\n好好享受当下的课堂吧。</string>
+    <string name="home_no_courses">还没有选课记录\n请联系教师将你加入课程。</string>
+    <string name="home_metric_courses">我的课程</string>
+    <string name="home_metric_pending">待填问卷</string>
+
+    <!-- Questionnaire -->
+    <string name="quest_title_fill">填写问卷</string>
+    <string name="quest_title_readonly">查看作答</string>
+    <string name="quest_submit_anonymous">提交问卷（匿名）</string>
+    <string name="quest_privacy_hint">提交后教师将看到匿名结果，不会展示你的姓名。</string>
+    <string name="quest_already_submitted">你已提交此问卷</string>
+    <string name="quest_empty_title">题目为空</string>
+    <string name="quest_empty_subtitle">请联系教师检查问卷配置</string>
+    <string name="quest_progress_format">已答 %1$d / 共 %2$d 题</string>
+    <string name="quest_required_missing">第 %1$d 题未作答</string>
+    <string name="quest_rating_hint_1">很差</string>
+    <string name="quest_rating_hint_2">较差</string>
+    <string name="quest_rating_hint_3">一般</string>
+    <string name="quest_rating_hint_4">不错</string>
+    <string name="quest_rating_hint_5">很好</string>
+
+    <!-- Course -->
+    <string name="course_discover">发现课程</string>
+    <string name="course_detail_overview">概览</string>
+    <string name="course_detail_resources">资料</string>
+    <string name="course_detail_assignments">作业</string>
+    <string name="course_detail_surveys">问卷</string>
+    <string name="course_detail_qa">问答</string>
+    <string name="course_detail_reviews">评价</string>
+
+    <!-- AI -->
+    <string name="ai_title">AI 学习助手</string>
+    <string name="ai_subtitle">基于课程数据 RAG 检索增强</string>
+    <string name="ai_welcome">Hi～我是你的学习助手 ✨</string>
+    <string name="ai_welcome_sub">我可以帮你总结课程口碑、推荐选课方向，或评估课程难度。</string>
+    <string name="ai_placeholder">问我点什么…</string>
+    <string name="ai_stop_generating">停止生成</string>
+    <string name="ai_regenerate">重新生成</string>
+    <string name="ai_copy">复制</string>
+    <string name="ai_report">反馈问题</string>
+    <string name="ai_skip_typing">跳过动画</string>
+    <string name="ai_sources">参考来源</string>
+
+    <!-- Media -->
+    <string name="media_title">预览</string>
+    <string name="media_cannot_play">无法播放该媒体</string>
+    <string name="media_open_download">打开下载</string>
+    <string name="media_play">播放</string>
+
+    <!-- Empty / Error -->
+    <string name="empty_default">暂无数据</string>
+    <string name="error_default_title">出了点小状况</string>
+    <string name="error_network">请检查网络后重试</string>
+
+    <!-- Admin -->
+    <string name="admin_reject_reason">驳回理由</string>
+
+    <!-- Plurals -->
+    <plurals name="course_count">
+        <item quantity="other">%d 门课程</item>
+    </plurals>
+    <plurals name="survey_count">
+        <item quantity="other">%d 份问卷</item>
+    </plurals>
+</resources>
