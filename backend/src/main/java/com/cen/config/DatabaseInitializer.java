@@ -1,5 +1,6 @@
 package com.cen.config;
 
+import com.cen.service.IKnowledgeBaseService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
@@ -27,6 +28,9 @@ public class DatabaseInitializer implements CommandLineRunner {
     @Resource
     private JdbcTemplate jdbcTemplate;
 
+    @Resource
+    private IKnowledgeBaseService knowledgeBaseService;
+
     @Override
     public void run(String... args) {
         safeExec("ALTER TABLE sys_courses ADD COLUMN course_time VARCHAR(255) DEFAULT NULL",
@@ -40,6 +44,8 @@ public class DatabaseInitializer implements CommandLineRunner {
         safeExec("ALTER TABLE sys_courses ADD COLUMN reviewed_at DATETIME DEFAULT NULL",
                 "reviewed_at");
         safeExec("CREATE INDEX idx_status ON sys_courses(status)", "idx_status");
+        safeExec("ALTER TABLE sys_kb_chunk ADD COLUMN embedding LONGTEXT DEFAULT NULL",
+                "kb_chunk.embedding");
 
         // ---- 选课关系表（sys_course_students）扩展字段：申请/邀请工作流 ----
         safeExec("ALTER TABLE sys_course_students ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'approved'",
@@ -99,6 +105,13 @@ public class DatabaseInitializer implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.warn("[DB-Init] ensure built-in admins failed: {}", e.getMessage());
+        }
+
+        try {
+            int courses = knowledgeBaseService.rebuildAll();
+            log.info("[DB-Init] knowledge base rebuilt for {} course(s)", courses);
+        } catch (Exception e) {
+            log.warn("[DB-Init] knowledge base rebuild skipped: {}", e.getMessage());
         }
     }
 

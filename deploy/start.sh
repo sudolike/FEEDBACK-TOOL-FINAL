@@ -18,6 +18,11 @@ else
   exit 1
 fi
 
+if ! docker info >/dev/null 2>&1; then
+  echo "[ERROR] Docker daemon 未运行。请先启动 Docker Desktop，确认 'Engine running' 后再执行。"
+  exit 1
+fi
+
 echo "[INFO] 构建并启动容器..."
 $DC --env-file .env up -d --build
 

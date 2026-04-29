@@ -57,9 +57,9 @@ fun AiAssistantFab(
     onSend: (String) -> Unit,
     modifier: Modifier = Modifier,
     quickActions: List<Pair<String, String>> = listOf(
-        "总结这门课的口碑" to "请基于课程评价数据总结这门课的口碑、优点、不足。",
-        "选课推荐" to "我现在该选什么课？请基于历史评价给我推荐。",
-        "评估课程难度" to "请基于历史反馈评估这门课的难度，并给出学习建议。",
+        "HKU 课程评价总结" to "请总结 HKU GEOG7310 这门课的定位、适合人群和整体口碑。",
+        "HKU 选课推荐" to "如果我在 HKU 想学云计算和数据分析，GEOG7307、GEOG7310、COMP7305 更推荐哪门？",
+        "HKU 课程难度评估" to "HKU COMP3230 难度怎么样，适合什么背景的学生？",
     ),
 ) {
     var open by remember { mutableStateOf(false) }
