@@ -9,10 +9,14 @@ import com.alibaba.dashscope.common.Role;
 import com.cen.controller.dto.ChatRequestDTO;
 import com.cen.controller.dto.ChatResponseDTO;
 import com.cen.entity.ChatMessage;
+import com.cen.entity.CourseFeedback;
+import com.cen.entity.Courses;
 import com.cen.entity.KbChunk;
 import com.cen.entity.QuestionnaireResponses;
 import com.cen.entity.Questionnaires;
 import com.cen.mapper.ChatMessageMapper;
+import com.cen.mapper.CourseFeedbackMapper;
+import com.cen.mapper.CoursesMapper;
 import com.cen.mapper.QuestionnaireResponsesMapper;
 import com.cen.mapper.QuestionnairesMapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -26,6 +30,7 @@ import javax.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -49,6 +54,8 @@ public class AssistantServiceImpl implements IAssistantService {
     @Resource private ChatMessageMapper chatMessageMapper;
     @Resource private QuestionnairesMapper questionnairesMapper;
     @Resource private QuestionnaireResponsesMapper questionnaireResponsesMapper;
+    @Resource private CoursesMapper coursesMapper;
+    @Resource private CourseFeedbackMapper courseFeedbackMapper;
 
     @Override
     public ChatResponseDTO chat(ChatRequestDTO req) {
@@ -85,17 +92,30 @@ public class AssistantServiceImpl implements IAssistantService {
             }
             userMsg.append("【说明】请优先依据上述资料作答，未涵盖时再用通识回答；引用资料时使用 [编号]。\n\n");
         }
+
+        // 教师场景的 query routing：
+        // 当老师在通用 AI 助手里问"问卷反馈/学生评价/总结改进"等意图时，
+        // 自动注入这位老师近期课程的真实问卷答案与课程评价，避免 LLM 凭空作答。
+        String teacherCtx = buildTeacherFeedbackContext(req);
+        if (teacherCtx != null) {
+            userMsg.append(teacherCtx);
+        }
+
         userMsg.append("【用户问题】").append(req.getMessage());
 
         messages.add(Message.builder().role(Role.USER.getValue()).content(userMsg.toString()).build());
 
         // 3) 调用通义千问
         String reply;
-        String demoFallbackReply = buildDemoFallbackReply(citations);
+        // demo fallback 仅在用户提问明确指向 HKU 示例课程时才触发，避免任意提问被 demo 截胡。
+        String demoFallbackReply = buildDemoFallbackReply(req.getMessage(), citations);
+        String genericFallback = buildGenericFallbackReply(citations);
         if (StrUtil.isBlank(apiKey)) {
             reply = demoFallbackReply != null
                     ? demoFallbackReply
-                    : "AI 服务暂不可用，请先配置 AI_API_KEY 后重试。";
+                    : (genericFallback != null
+                        ? genericFallback
+                        : "AI 服务暂不可用，请先配置 AI_API_KEY 后重试。");
         } else {
             try {
                 GenerationParam param = GenerationParam.builder()
@@ -108,15 +128,18 @@ public class AssistantServiceImpl implements IAssistantService {
                 GenerationResult result = generation.call(param);
                 reply = result.getOutput().getChoices().get(0).getMessage().getContent();
                 if (StrUtil.isBlank(reply)) {
-                    reply = demoFallbackReply != null
-                            ? demoFallbackReply
-                            : "AI 服务暂不可用，请稍后再试。";
+                    reply = genericFallback != null
+                            ? genericFallback
+                            : (demoFallbackReply != null ? demoFallbackReply : "AI 服务暂不可用，请稍后再试。");
                 }
             } catch (Exception e) {
                 log.error("AI 调用失败", e);
-                reply = demoFallbackReply != null
-                        ? demoFallbackReply
-                        : "AI 服务暂不可用，请稍后再试。错误信息：" + e.getMessage();
+                // 调用失败时优先给"基于检索资料"的通用兜底，最后才考虑 demo 文案
+                reply = genericFallback != null
+                        ? genericFallback
+                        : (demoFallbackReply != null
+                            ? demoFallbackReply
+                            : "AI 服务暂不可用，请稍后再试。错误信息：" + e.getMessage());
             }
         }
 
@@ -207,8 +230,13 @@ public class AssistantServiceImpl implements IAssistantService {
         }
     }
 
-    private String buildDemoFallbackReply(List<KbChunk> citations) {
+    /**
+     * demo HKU fallback：仅在 query 明确指向 HKU 示例课程时返回写死文案。
+     * 仅靠 citation 中存在 demo chunk 不足以触发（避免任何提问都被 HKU 截胡）。
+     */
+    private String buildDemoFallbackReply(String query, List<KbChunk> citations) {
         if (citations == null || citations.isEmpty()) return null;
+        if (!queryMentionsHkuDemo(query)) return null;
         for (KbChunk citation : citations) {
             if (!DEMO_SOURCE_TYPE.equals(citation.getSourceType()) || citation.getSourceId() == null) {
                 continue;
@@ -233,5 +261,149 @@ public class AssistantServiceImpl implements IAssistantService {
             }
         }
         return null;
+    }
+
+    private boolean queryMentionsHkuDemo(String query) {
+        if (query == null) return false;
+        String q = query.toLowerCase(Locale.ROOT);
+        return q.contains("hku") || q.contains("geog7307") || q.contains("geog7310")
+                || q.contains("comp7305") || q.contains("comp3230")
+                || q.contains("cloud computing for geospatial")
+                || q.contains("principles of operating systems")
+                || q.contains("big data analytics");
+    }
+
+    /**
+     * 通用兜底：AI 不可用时，把检索到的真实资料整理成一段引用式回答。
+     * 不会把无关的 demo 文案塞给老师。
+     */
+    private String buildGenericFallbackReply(List<KbChunk> citations) {
+        if (citations == null || citations.isEmpty()) return null;
+        List<KbChunk> real = citations.stream()
+                .filter(c -> c != null && !DEMO_SOURCE_TYPE.equals(c.getSourceType()))
+                .limit(3)
+                .collect(Collectors.toList());
+        if (real.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder();
+        sb.append("（AI 在线服务暂时不可用，以下是从内部资料中检索到的相关内容，供参考）\n\n");
+        int idx = 1;
+        for (KbChunk c : real) {
+            sb.append("[").append(idx++).append("] ").append(c.getTitle() == null ? "" : c.getTitle()).append("\n");
+            String content = c.getContent() == null ? "" : c.getContent();
+            if (content.length() > 400) content = content.substring(0, 400) + "...";
+            sb.append(content).append("\n\n");
+        }
+        sb.append("如需更精炼的总结，请稍后再试或检查 AI_API_KEY 配置。");
+        return sb.toString();
+    }
+
+    /* =====================================================================
+     * 教师场景 query routing：把真实问卷反馈 / 课程评价注入对话上下文
+     * ===================================================================== */
+
+    private static final int FEEDBACK_LIMIT_PER_COURSE = 30;
+    private static final int RESPONSE_LIMIT_PER_QUEST = 40;
+    private static final int MAX_COURSES_FOR_TEACHER = 3;
+
+    /**
+     * 命中"问卷反馈 / 学生评价 / 改进建议"等意图，且当前为教师角色时返回真实数据上下文。
+     * 否则返回 null（保留通用 RAG 流程）。
+     */
+    private String buildTeacherFeedbackContext(ChatRequestDTO req) {
+        if (req == null || !"teacher".equalsIgnoreCase(req.getRole())) return null;
+        if (req.getUserId() == null) return null;
+        String msg = req.getMessage();
+        if (StrUtil.isBlank(msg)) return null;
+        if (!isTeacherFeedbackIntent(msg)) return null;
+
+        // 选课范围：优先 req.courseId；否则取该教师所授课程（最多 MAX_COURSES_FOR_TEACHER 门）
+        List<Courses> courses = new ArrayList<>();
+        if (req.getCourseId() != null) {
+            Courses single = coursesMapper.selectById(req.getCourseId());
+            if (single != null && req.getUserId().equals(single.getTeacherId())) {
+                courses.add(single);
+            }
+        } else {
+            QueryWrapper<Courses> cq = new QueryWrapper<>();
+            cq.eq("teacher_id", req.getUserId()).orderByDesc("id")
+                    .last("LIMIT " + MAX_COURSES_FOR_TEACHER);
+            courses = coursesMapper.selectList(cq);
+        }
+        if (courses.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("【教师内部数据：你授课课程的近期反馈与问卷答案】\n");
+        sb.append("（仅供你参考，请不要透露具体学生姓名/学号）\n\n");
+
+        boolean anyData = false;
+        for (Courses c : courses) {
+            sb.append("== 课程：").append(c.getName() == null ? "未命名" : c.getName())
+                    .append("（ID=").append(c.getId()).append("） ==\n");
+
+            // 1) 课程文字评价 / 评分
+            QueryWrapper<CourseFeedback> fq = new QueryWrapper<>();
+            fq.eq("course_id", c.getId()).orderByDesc("id")
+                    .last("LIMIT " + FEEDBACK_LIMIT_PER_COURSE);
+            List<CourseFeedback> fbs = courseFeedbackMapper.selectList(fq);
+            if (!fbs.isEmpty()) {
+                anyData = true;
+                double avg = fbs.stream().filter(f -> f.getRating() != null)
+                        .mapToInt(CourseFeedback::getRating).average().orElse(0);
+                sb.append("[课程评价] 共 ").append(fbs.size())
+                        .append(" 条，平均评分 ").append(String.format("%.2f", avg)).append("/5\n");
+                int kept = 0;
+                for (CourseFeedback f : fbs) {
+                    if (kept++ >= 12) break;
+                    sb.append("  - ").append(f.getRating() == null ? "" : ("[" + f.getRating() + "★] "))
+                            .append(safe(f.getContent())).append('\n');
+                }
+            }
+
+            // 2) 该课程下问卷答案（取近期 3 份问卷，每份最多 40 条匿名答案）
+            QueryWrapper<Questionnaires> qq = new QueryWrapper<>();
+            qq.eq("course_id", c.getId()).orderByDesc("id").last("LIMIT 3");
+            List<Questionnaires> qs = questionnairesMapper.selectList(qq);
+            for (Questionnaires q : qs) {
+                QueryWrapper<QuestionnaireResponses> rq = new QueryWrapper<>();
+                rq.eq("course_id", c.getId()).eq("questionnaire_id", q.getId())
+                        .orderByDesc("id").last("LIMIT " + RESPONSE_LIMIT_PER_QUEST);
+                List<QuestionnaireResponses> resps = questionnaireResponsesMapper.selectList(rq);
+                if (resps.isEmpty()) continue;
+                anyData = true;
+                sb.append("[问卷:").append(safe(q.getTitle())).append("] 共 ")
+                        .append(resps.size()).append(" 份匿名回答\n");
+                int kept = 0;
+                for (QuestionnaireResponses r : resps) {
+                    if (kept++ >= 15) break;
+                    String answers = safe(r.getAnswers());
+                    if (answers.length() > 280) answers = answers.substring(0, 280) + "...";
+                    sb.append("  · ").append(answers).append('\n');
+                }
+            }
+            sb.append('\n');
+        }
+
+        if (!anyData) return null;
+        sb.append("【任务】请基于以上真实数据回答用户的问题，不要编造未在数据中出现的内容。\n\n");
+        return sb.toString();
+    }
+
+    private boolean isTeacherFeedbackIntent(String msg) {
+        String q = msg.toLowerCase(Locale.ROOT);
+        // 中英文常见意图关键词，命中任意一个即视为"教师反馈分析"场景
+        String[] keys = {
+                "问卷", "反馈", "评价", "学生意见", "意见", "改进", "总结", "汇总",
+                "归纳", "评分", "满意度",
+                "feedback", "survey", "questionnaire", "summary", "summarize",
+                "review", "improve", "rating",
+        };
+        for (String k : keys) {
+            if (q.contains(k)) return true;
+        }
+        return false;
+    }
+
+    private static String safe(String s) {
+        return s == null ? "" : s;
     }
 }

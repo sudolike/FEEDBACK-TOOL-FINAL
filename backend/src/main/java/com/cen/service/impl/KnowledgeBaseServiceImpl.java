@@ -33,7 +33,12 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
     private static final long DEMO_RECOMMEND_ID = 910002L;
     private static final long DEMO_DIFFICULTY_ID = 910003L;
     private static final int EMBED_DIM = 256;
-    private static final double MIN_EMBED_SCORE = 0.08d;
+    /**
+     * Embedding 余弦相似度门槛。
+     * 之前 0.08 太低导致中文 2-gram 在 256 维 hash 空间里随便就过线，
+     * 提到 0.22 后明显抑制无关命中（校准依据：教师"问卷总结"类提问不再被 HKU demo 截胡）。
+     */
+    private static final double MIN_EMBED_SCORE = 0.22d;
 
     @Resource private KbChunkMapper kbChunkMapper;
     @Resource private CoursesMapper coursesMapper;
@@ -149,8 +154,27 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
         for (QaPost p : qaPostMapper.selectList(new QueryWrapper<>())) {
             syncQa(p.getId());
         }
-        seedHkuDemoChunks();
+        // 注意：HKU demo chunks **不再写入数据库**（避免污染主检索路径）。
+        // demo 内容仅通过 searchHkuDemoExamples() 在用户显式提问 HKU 课程时按规则匹配返回。
+        purgeLegacyDemoChunks();
         return count;
+    }
+
+    /**
+     * 兼容老库：把历史上误写入的 demo_hku chunks 清出 sys_kb_chunk，
+     * 防止任意中文提问被 demo 内容截胡。
+     */
+    private void purgeLegacyDemoChunks() {
+        try {
+            QueryWrapper<KbChunk> qw = new QueryWrapper<>();
+            qw.eq("source_type", DEMO_SOURCE_TYPE);
+            int n = kbChunkMapper.delete(qw);
+            if (n > 0) {
+                log.info("[KB] purged {} legacy demo_hku chunks from sys_kb_chunk", n);
+            }
+        } catch (Exception e) {
+            log.warn("[KB] purge legacy demo_hku chunks skipped: {}", e.getMessage());
+        }
     }
 
     @Override
@@ -159,16 +183,18 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
         List<String> kws = tokenize(query);
         if (kws.isEmpty()) return Collections.emptyList();
 
+        // 主检索路径（embedding / 全文索引 / LIKE）严格排除 demo_hku：
+        // demo 数据仅在 searchHkuDemoExamples 显式关键词匹配时返回。
         List<KbChunk> embeddingHits = searchByEmbedding(query, courseId, topK);
         List<KbChunk> dbHits = Collections.emptyList();
 
-        // 优先：MATCH AGAINST ngram 全文检索
         try {
             QueryWrapper<KbChunk> q = new QueryWrapper<>();
             String boolean_query = kws.stream().map(k -> "+" + escape(k) + "*").collect(Collectors.joining(" "));
             q.apply("MATCH(title,content,keywords) AGAINST({0} IN BOOLEAN MODE)", boolean_query);
+            q.ne("source_type", DEMO_SOURCE_TYPE);
             if (courseId != null) {
-                q.eq("course_id", courseId).or().isNull("course_id");
+                q.and(w -> w.eq("course_id", courseId).or().isNull("course_id"));
             }
             q.last("LIMIT " + Math.max(1, topK));
             dbHits = kbChunkMapper.selectList(q);
@@ -176,8 +202,11 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
             // 退化到 LIKE 兜底
         }
         if (dbHits.isEmpty()) {
-            dbHits = kbChunkMapper.searchByLike(kws, courseId, topK);
+            dbHits = kbChunkMapper.searchByLike(kws, courseId, topK).stream()
+                    .filter(c -> !DEMO_SOURCE_TYPE.equals(c.getSourceType()))
+                    .collect(Collectors.toList());
         }
+        // demo 仅当用户问题明确含 HKU 课程关键词时才参与
         List<KbChunk> demoHits = searchHkuDemoExamples(query);
         return mergeHits(embeddingHits, mergeHits(demoHits, dbHits, topK), topK);
     }
@@ -189,6 +218,8 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
         if (isZeroVector(queryVector)) return Collections.emptyList();
 
         QueryWrapper<KbChunk> q = new QueryWrapper<>();
+        // demo 数据不参与向量召回，避免低维 hash embedding 在中文上误命中
+        q.ne("source_type", DEMO_SOURCE_TYPE);
         if (courseId != null) {
             q.and(w -> w.eq("course_id", courseId).or().isNull("course_id"));
         }
@@ -303,20 +334,21 @@ public class KnowledgeBaseServiceImpl implements IKnowledgeBaseService {
         return safe(chunk.getSourceType()) + ":" + chunk.getSourceId() + ":" + safe(chunk.getTitle());
     }
 
+    /**
+     * demo 三条 HKU 例子的命中条件统一收紧为：
+     *   提问必须显式出现该课程编号 / 该课程英文标题。
+     * 仅靠"评价 / 推荐 / 难度"等通用词不足以触发 demo（防止老师问"问卷总结"被截胡）。
+     */
     private boolean matchesSummaryExample(String q) {
-        return containsAny(q, "评价", "口碑", "总结", "summary", "review")
-                && containsAny(q, "geog7310", "cloud computing", "geospatial data analytics", "hku");
+        return containsAny(q, "geog7310", "cloud computing for geospatial");
     }
 
     private boolean matchesRecommendExample(String q) {
-        return containsAny(q, "推荐", "选课", "recommend", "which course", "哪门")
-                && (containsAny(q, "geog7307", "geog7310", "comp7305")
-                || (containsAny(q, "cloud", "云计算") && containsAny(q, "analytics", "data", "数据分析")));
+        return containsAny(q, "geog7307", "geog7310", "comp7305", "big data analytics", "cluster and cloud computing");
     }
 
     private boolean matchesDifficultyExample(String q) {
-        return containsAny(q, "comp3230", "operating systems", "操作系统")
-                && containsAny(q, "难度", "difficulty", "适合", "background", "workload", "难不难", "基础");
+        return containsAny(q, "comp3230", "principles of operating systems");
     }
 
     private boolean containsAny(String q, String... parts) {
