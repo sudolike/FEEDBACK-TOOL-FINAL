@@ -14,7 +14,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM 启用 BuildKit 让 Dockerfile 中的 --mount=type=cache 生效（Maven 依赖缓存复用）
+REM Enable BuildKit so Dockerfile --mount=type=cache (Maven cache reuse) works
 set DOCKER_BUILDKIT=1
 set COMPOSE_DOCKER_CLI_BUILD=1
 
@@ -37,7 +37,7 @@ if "!state!"=="healthy" (
     echo [OK] Backend is ready. Visit: http://localhost:9091
     goto end
 )
-REM docker inspect 偶尔慢半拍，curl 兜底
+REM curl fallback in case docker inspect lags
 curl -fsS http://localhost:9091/actuator/health/live >nul 2>nul
 if !errorlevel! == 0 (
     echo [OK] Backend /actuator/health/live ready. Visit: http://localhost:9091

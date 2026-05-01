@@ -107,19 +107,22 @@ public class QuestionnaireResponsesController {
     }
 
     /**
-     * AI分析问卷填写情况
-     * 使用阿里通义千问AI对单个问卷的填写情况进行智能分析
-     * 
-     * @param courseId 课程ID
-     * @param questionnaireId 问卷ID
-     * @return 包含问卷信息、填写人数和AI分析结果的数据
-     * @throws NoApiKeyException API密钥不存在或无效时抛出
-     * @throws InputRequiredException 输入参数缺失或格式错误时抛出
+     * 问卷数据分析（含逐题统计 + 可选 AI 文本分析）
+     *
+     * 返回字段：
+     *  - questionnaire     问卷基本信息
+     *  - totalResponses    填写总数
+     *  - questions[]       逐题统计（前端"逐题分析"卡片消费）
+     *      - id / title / type / responses / required
+     *      - distribution  选择题选项分布 / 评分题 1..5 分布
+     *      - average       评分题平均分
+     *      - samples       文本题前若干条示例
+     *  - analysis          AI 文本分析（在线服务可用时返回，否则为空字符串）
      */
     @GetMapping("/analysis")
     public Result getQuestionnaireAnalysis(
             @RequestParam Long courseId,
-            @RequestParam Long questionnaireId) throws NoApiKeyException, InputRequiredException {
+            @RequestParam Long questionnaireId) {
         // 1. 获取问卷基本信息
         Questionnaires questionnaire = questionnairesMapper.selectById(questionnaireId);
         if (questionnaire == null) {
@@ -127,50 +130,181 @@ public class QuestionnaireResponsesController {
         }
 
         // 2. 获取问卷的填写详情
-        QuestionnaireResponseSummaryDTO responses = questionnaireResponsesService.getQuestionnaireResponseSummary(courseId, questionnaireId);
-        
-        // 3. 构建AI分析的输入内容（预设指令）
-        // 这里构建了发送给AI的提示词(prompt)，包含问卷信息和要求
-        StringBuilder aiInput = new StringBuilder();
-        // 设置AI分析的主要任务和输出要求（使用英文输出）
-        aiInput.append("请分析以下问卷调查数据并给出专业的分析报告。并全部用英文输出\n\n");
-        // 添加问卷的基本信息
-        aiInput.append("问卷标题：").append(questionnaire.getTitle()).append("\n");
-        aiInput.append("问卷描述：").append(questionnaire.getDescription()).append("\n");
-        aiInput.append("总问题数量：").append(responses.getTotalQuestions()).append("\n\n");
-        aiInput.append("总填写人数：").append(responses.getTotalResponses()).append("\n\n");
-        // 添加问卷题目数据，用于AI理解问题内容
-        aiInput.append("题目数据：").append(responses.getQuestionnaire().getQuestions()).append("\n\n");
-        // 添加所有答案数据，这是AI分析的核心数据
-        aiInput.append("答案数据：\n").append(responses.getAnswers()).append("\n\n");;
-        // 4. 调用阿里通义千问AI进行分析
-        // 构建用户消息对象，包含我们构建的提示词
-        Message userMessage = Message.builder()
-                .role(Role.USER.getValue()) // 设置消息角色为用户
-                .content(aiInput.toString()) // 设置消息内容为构建的提示词
-                .build();
+        QuestionnaireResponseSummaryDTO responses =
+                questionnaireResponsesService.getQuestionnaireResponseSummary(courseId, questionnaireId);
 
-        // 配置AI生成参数
-        GenerationParam param = GenerationParam.builder()
-                .model("qwen-turbo") // 使用通义千问的高效模型
-                .messages(Arrays.asList(userMessage)) // 设置消息历史
-                .resultFormat(GenerationParam.ResultFormat.MESSAGE) // 设置返回格式为消息格式
-                .topP(0.8) // 设置生成多样性参数
-                .apiKey(apiKey) // 设置API密钥
-                .enableSearch(true) // 启用互联网搜索，增强分析能力
-                .build();
+        // 3. 逐题统计（前端"逐题分析"卡片直接消费）
+        List<Map<String, Object>> perQuestion = buildPerQuestionStats(
+                questionnaire.getQuestions(), responses.getAnswers());
 
-        GenerationResult generationResult = generation.call(param);
-        String analysis = generationResult.getOutput().getChoices().get(0).getMessage().getContent();
+        // 4. 在线 AI 分析（失败/未配置 key 时退化为空字符串，不阻塞统计返回）
+        String analysis = tryAiQuestionnaireAnalysis(questionnaire, responses);
 
-        // 5. 返回分析结果
         Map<String, Object> result = new HashMap<>();
         result.put("questionnaire", questionnaire);
         result.put("totalResponses", responses.getTotalResponses());
+        result.put("questions", perQuestion);
         result.put("analysis", analysis);
-        
         return Result.success(result);
     }
+
+    /**
+     * 解析问卷题目 + 所有答案，按题型聚合统计。
+     * 鲁棒处理：单条答案可能是 {qid: value} 形式，也可能是空 / 非法 JSON。
+     */
+    private List<Map<String, Object>> buildPerQuestionStats(
+            String questionsJson, List<String> answerJsonList) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (questionsJson == null || questionsJson.trim().isEmpty()) return out;
+
+        com.alibaba.fastjson.JSONArray questions;
+        try {
+            questions = com.alibaba.fastjson.JSON.parseArray(questionsJson);
+        } catch (Exception e) {
+            return out;
+        }
+        if (questions == null) return out;
+
+        // 把所有答案解析成 List<Map> 备用（容错：JSON / 字符串 / null）
+        List<Map<String, Object>> parsedAnswers = new ArrayList<>();
+        if (answerJsonList != null) {
+            for (String ans : answerJsonList) {
+                if (ans == null || ans.trim().isEmpty()) continue;
+                try {
+                    com.alibaba.fastjson.JSONObject obj = com.alibaba.fastjson.JSON.parseObject(ans);
+                    if (obj != null) parsedAnswers.add(new HashMap<>(obj));
+                } catch (Exception ignore) {
+                    // 容错：单条答案非合法 JSON 时整体跳过
+                }
+            }
+        }
+
+        for (int i = 0; i < questions.size(); i++) {
+            com.alibaba.fastjson.JSONObject q = questions.getJSONObject(i);
+            if (q == null) continue;
+            String qid = q.getString("id");
+            String type = q.getString("type") == null ? "text" : q.getString("type");
+            String title = q.getString("title");
+            Boolean required = q.getBoolean("required");
+            com.alibaba.fastjson.JSONArray opts = q.getJSONArray("options");
+
+            Map<String, Object> stat = new HashMap<>();
+            stat.put("id", qid);
+            stat.put("title", title);
+            stat.put("type", type);
+            stat.put("required", required != null && required);
+
+            int answeredCount = 0;
+            Map<String, Integer> dist = new java.util.LinkedHashMap<>();
+            // 评分题预填 1..5 槽，避免前端只看到部分键
+            if ("rating".equalsIgnoreCase(type)) {
+                for (int s = 1; s <= 5; s++) dist.put(s + "★", 0);
+            } else if (opts != null) {
+                for (int oi = 0; oi < opts.size(); oi++) {
+                    dist.put(String.valueOf(opts.get(oi)), 0);
+                }
+            }
+            double sum = 0;
+            int sumCount = 0;
+            List<String> textSamples = new ArrayList<>();
+
+            for (Map<String, Object> ans : parsedAnswers) {
+                Object v = qid == null ? null : ans.get(qid);
+                if (v == null) continue;
+                answeredCount++;
+                switch (type.toLowerCase()) {
+                    case "single":
+                        dist.merge(String.valueOf(v), 1, Integer::sum);
+                        break;
+                    case "multiple":
+                        if (v instanceof java.util.List) {
+                            for (Object ov : (java.util.List<?>) v) {
+                                dist.merge(String.valueOf(ov), 1, Integer::sum);
+                            }
+                        } else {
+                            dist.merge(String.valueOf(v), 1, Integer::sum);
+                        }
+                        break;
+                    case "rating":
+                        try {
+                            int r = (v instanceof Number)
+                                    ? ((Number) v).intValue()
+                                    : Integer.parseInt(String.valueOf(v));
+                            if (r >= 1 && r <= 5) {
+                                dist.merge(r + "★", 1, Integer::sum);
+                                sum += r;
+                                sumCount++;
+                            }
+                        } catch (Exception ignore) {}
+                        break;
+                    case "text":
+                    default:
+                        String s = String.valueOf(v).trim();
+                        if (!s.isEmpty() && textSamples.size() < 8) {
+                            textSamples.add(s.length() > 200 ? s.substring(0, 200) + "..." : s);
+                        }
+                        break;
+                }
+            }
+
+            stat.put("responses", answeredCount);
+            if (!"text".equalsIgnoreCase(type)) {
+                stat.put("distribution", dist);
+            }
+            if ("rating".equalsIgnoreCase(type) && sumCount > 0) {
+                stat.put("average", Math.round((sum / sumCount) * 100.0) / 100.0);
+            }
+            if ("text".equalsIgnoreCase(type) && !textSamples.isEmpty()) {
+                stat.put("samples", textSamples);
+            }
+            out.add(stat);
+        }
+        return out;
+    }
+
+    /** 在线 AI 分析（失败 → 返回空串；不影响逐题统计返回） */
+    private String tryAiQuestionnaireAnalysis(Questionnaires questionnaire,
+                                              QuestionnaireResponseSummaryDTO responses) {
+        if (apiKey == null || apiKey.trim().isEmpty()) return "";
+        try {
+            StringBuilder aiInput = new StringBuilder();
+            aiInput.append("请用中文为下面这份课程问卷给出 1) 整体满意度概述（3 句以内）；")
+                    .append("2) 学生反映的 3-5 个亮点；3) 待改进的 3-5 个共性问题；")
+                    .append("4) 给授课教师一句直接、可执行的改进建议。\n")
+                    .append("不要透露任何学生姓名/学号；不要编造未在数据中出现的内容。\n\n");
+            aiInput.append("问卷标题：").append(safe(questionnaire.getTitle())).append("\n");
+            aiInput.append("问卷描述：").append(safe(questionnaire.getDescription())).append("\n");
+            aiInput.append("总题数：").append(responses.getTotalQuestions()).append("\n");
+            aiInput.append("总填写人数：").append(responses.getTotalResponses()).append("\n\n");
+            aiInput.append("题目结构 (JSON)：").append(safe(questionnaire.getQuestions())).append("\n\n");
+            aiInput.append("答案集合（每条用 ---- 分隔）：\n");
+            if (responses.getAnswers() != null) {
+                for (int i = 0; i < responses.getAnswers().size() && i < 80; i++) {
+                    aiInput.append(safe(responses.getAnswers().get(i))).append("\n----\n");
+                }
+            }
+
+            Message userMessage = Message.builder()
+                    .role(Role.USER.getValue())
+                    .content(aiInput.toString())
+                    .build();
+            GenerationParam param = GenerationParam.builder()
+                    .model("qwen-turbo")
+                    .messages(Arrays.asList(userMessage))
+                    .resultFormat(GenerationParam.ResultFormat.MESSAGE)
+                    .topP(0.8)
+                    .apiKey(apiKey)
+                    .build();
+            GenerationResult result = generation.call(param);
+            String text = result.getOutput().getChoices().get(0).getMessage().getContent();
+            return text == null ? "" : text;
+        } catch (Exception e) {
+            // AI 不可用不阻塞主流程
+            return "";
+        }
+    }
+
+    private static String safe(String s) { return s == null ? "" : s; }
 
     /**
      * AI对比分析多个问卷填写情况

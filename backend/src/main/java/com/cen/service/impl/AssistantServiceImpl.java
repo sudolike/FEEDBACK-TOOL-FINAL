@@ -190,22 +190,155 @@ public class AssistantServiceImpl implements IAssistantService {
         List<QuestionnaireResponses> list = questionnaireResponsesMapper.selectList(qw);
         if (list.isEmpty()) return "暂无问卷答案，无法总结";
 
+        // 直接构造完整 prompt 调用 LLM —— 故意绕开 chat() 走 RAG 检索
+        // （问卷答案本身已经是完整数据，再做 RAG 反而会混入无关课程内容）
         String combined = list.stream().limit(80).map(QuestionnaireResponses::getAnswers)
+                .filter(s -> s != null && !s.isEmpty())
                 .collect(Collectors.joining("\n----\n"));
 
-        String prompt = "下面是某门课程问卷的匿名学生答案，请你做四件事：\n" +
-                "1) 三句话总结整体满意度；\n" +
-                "2) 列出排名前 5 的优点；\n" +
-                "3) 列出排名前 5 的待改进项；\n" +
-                "4) 给授课老师一句直接的、可执行的改进建议。\n" +
-                "请使用中文，不要凭空编造。\n\n问卷题目：\n" + q.getQuestions() +
-                "\n\n答案集合（每条用 ---- 分隔）：\n" + combined;
+        String prompt = "你是教学评估专家。下面是某门课程匿名学生问卷的全部答案。请用中文输出：\n" +
+                "1) 三句话总结整体满意度（含覆盖人数）；\n" +
+                "2) 排名前 5 的优点（要具体）；\n" +
+                "3) 排名前 5 的待改进项（要具体）；\n" +
+                "4) 给授课老师一句可立刻执行的改进建议。\n" +
+                "约束：禁止编造未在数据中出现的内容；禁止透露学生姓名/学号；如果答案数量很少，请直接说明样本不足。\n\n" +
+                "问卷标题：" + (q.getTitle() == null ? "" : q.getTitle()) + "\n" +
+                "问卷题目 (JSON)：\n" + (q.getQuestions() == null ? "" : q.getQuestions()) +
+                "\n\n答案集合（共 " + list.size() + " 份，每条用 ---- 分隔）：\n" + combined;
 
-        ChatRequestDTO req = new ChatRequestDTO();
-        req.setRole("teacher");
-        req.setScene("summarize");
-        req.setMessage(prompt);
-        return chat(req).getReply();
+        // 调用 LLM；失败/未配置 key 时回退到基于真实数据的本地汇总（绝不返回 RAG 检索结果）
+        if (StrUtil.isBlank(apiKey)) {
+            return localQuestionnaireSummary(q, list);
+        }
+        try {
+            List<Message> messages = new ArrayList<>();
+            messages.add(Message.builder().role(Role.SYSTEM.getValue())
+                    .content("你是面向高校的教学评估专家，回答必须基于给定数据，禁止编造。").build());
+            messages.add(Message.builder().role(Role.USER.getValue()).content(prompt).build());
+            GenerationParam param = GenerationParam.builder()
+                    .apiKey(apiKey)
+                    .model(model)
+                    .messages(messages)
+                    .resultFormat(GenerationParam.ResultFormat.MESSAGE)
+                    .topP(0.8)
+                    .build();
+            GenerationResult result = generation.call(param);
+            String reply = result.getOutput().getChoices().get(0).getMessage().getContent();
+            if (StrUtil.isBlank(reply)) {
+                return localQuestionnaireSummary(q, list);
+            }
+            return reply;
+        } catch (Exception e) {
+            log.warn("summarizeQuestionnaire 调用 AI 失败，回退本地汇总：{}", e.getMessage());
+            return localQuestionnaireSummary(q, list);
+        }
+    }
+
+    /**
+     * AI 不可用时的"基于真实问卷数据"本地兜底：
+     * 按题型聚合统计 + 给出几条文本答案样本。
+     * 关键：绝对不引入 RAG 检索内容（避免与 demo HKU 等无关数据混淆）。
+     */
+    private String localQuestionnaireSummary(Questionnaires q, List<QuestionnaireResponses> list) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("（AI 在线服务暂不可用，以下基于本课程问卷的真实答案做本地汇总）\n\n");
+        sb.append("问卷：").append(q.getTitle() == null ? "" : q.getTitle())
+                .append("（共 ").append(list.size()).append(" 份匿名答案）\n\n");
+
+        com.alibaba.fastjson.JSONArray questions;
+        try {
+            questions = com.alibaba.fastjson.JSON.parseArray(q.getQuestions());
+        } catch (Exception e) {
+            questions = null;
+        }
+        if (questions == null || questions.isEmpty()) {
+            sb.append("题目结构解析失败，请检查问卷设计。");
+            return sb.toString();
+        }
+
+        // 把所有答案解析成 List<Map>
+        List<java.util.Map<String, Object>> parsed = new ArrayList<>();
+        for (QuestionnaireResponses r : list) {
+            if (r.getAnswers() == null || r.getAnswers().isEmpty()) continue;
+            try {
+                com.alibaba.fastjson.JSONObject obj = com.alibaba.fastjson.JSON.parseObject(r.getAnswers());
+                if (obj != null) parsed.add(new java.util.HashMap<>(obj));
+            } catch (Exception ignore) {}
+        }
+
+        for (int i = 0; i < questions.size(); i++) {
+            com.alibaba.fastjson.JSONObject qi = questions.getJSONObject(i);
+            if (qi == null) continue;
+            String qid = qi.getString("id");
+            String title = qi.getString("title");
+            String type = qi.getString("type") == null ? "text" : qi.getString("type");
+            sb.append((i + 1)).append(". ").append(title == null ? "" : title)
+                    .append("（").append(type).append("）\n");
+
+            switch (type.toLowerCase(Locale.ROOT)) {
+                case "rating": {
+                    double sum = 0; int cnt = 0; int[] hist = new int[5];
+                    for (java.util.Map<String, Object> a : parsed) {
+                        Object v = qid == null ? null : a.get(qid);
+                        if (v == null) continue;
+                        try {
+                            int r = (v instanceof Number)
+                                    ? ((Number) v).intValue()
+                                    : Integer.parseInt(String.valueOf(v));
+                            if (r >= 1 && r <= 5) { hist[r-1]++; sum += r; cnt++; }
+                        } catch (Exception ignore) {}
+                    }
+                    if (cnt > 0) {
+                        sb.append("   平均分 ").append(String.format(Locale.ROOT, "%.2f", sum/cnt))
+                                .append(" / 5（").append(cnt).append(" 份回答）。分布：");
+                        for (int s = 1; s <= 5; s++) {
+                            sb.append(s).append("★=").append(hist[s-1]).append(" ");
+                        }
+                        sb.append('\n');
+                    } else {
+                        sb.append("   暂无评分。\n");
+                    }
+                    break;
+                }
+                case "single":
+                case "multiple": {
+                    java.util.LinkedHashMap<String, Integer> dist = new java.util.LinkedHashMap<>();
+                    for (java.util.Map<String, Object> a : parsed) {
+                        Object v = qid == null ? null : a.get(qid);
+                        if (v == null) continue;
+                        if (v instanceof java.util.List) {
+                            for (Object ov : (java.util.List<?>) v) dist.merge(String.valueOf(ov), 1, Integer::sum);
+                        } else {
+                            dist.merge(String.valueOf(v), 1, Integer::sum);
+                        }
+                    }
+                    if (dist.isEmpty()) sb.append("   无答案。\n");
+                    else {
+                        for (java.util.Map.Entry<String, Integer> e : dist.entrySet()) {
+                            sb.append("   - ").append(e.getKey()).append("：").append(e.getValue()).append(" 票\n");
+                        }
+                    }
+                    break;
+                }
+                default: { // text
+                    int shown = 0;
+                    for (java.util.Map<String, Object> a : parsed) {
+                        Object v = qid == null ? null : a.get(qid);
+                        if (v == null) continue;
+                        String s = String.valueOf(v).trim();
+                        if (s.isEmpty()) continue;
+                        if (shown >= 5) break;
+                        if (s.length() > 160) s = s.substring(0, 160) + "...";
+                        sb.append("   · ").append(s).append('\n');
+                        shown++;
+                    }
+                    if (shown == 0) sb.append("   无文本答案。\n");
+                }
+            }
+            sb.append('\n');
+        }
+        sb.append("（请稍后重试或检查 AI_API_KEY 以获得 AI 文字总结。）");
+        return sb.toString();
     }
 
     private Message systemMessage(String role, String scene) {

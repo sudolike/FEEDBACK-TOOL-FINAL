@@ -208,6 +208,22 @@ fun TeacherAnalysisScreen(
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
+                                    val samples = q["samples"] as? List<*>
+                                    if (!samples.isNullOrEmpty()) {
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(
+                                            "学生回答示例：",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        samples.take(5).forEach { sample ->
+                                            Text(
+                                                "· ${sample}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.padding(start = 6.dp, top = 2.dp),
+                                            )
+                                        }
+                                    }
                                     Divider(modifier = Modifier.padding(top = 6.dp))
                                 }
                             }

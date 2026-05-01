@@ -37,12 +37,18 @@ public class AnalyticsController {
 
         int total = fbList.size();
         double avg = 0;
-        int[] hist = new int[6]; // index 1..5
+        // 5 个星级 1..5，下标 0 对应 1 星、下标 4 对应 5 星
+        int[] hist = new int[5];
         if (!fbList.isEmpty()) {
-            avg = fbList.stream().filter(f -> f.getRating() != null).mapToInt(CourseFeedback::getRating).average().orElse(0);
+            avg = fbList.stream()
+                    .filter(f -> f.getRating() != null)
+                    .mapToInt(CourseFeedback::getRating)
+                    .average()
+                    .orElse(0);
             for (CourseFeedback f : fbList) {
-                if (f.getRating() != null && f.getRating() >= 1 && f.getRating() <= 5) {
-                    hist[f.getRating()]++;
+                Integer r = f.getRating();
+                if (r != null && r >= 1 && r <= 5) {
+                    hist[r - 1]++;
                 }
             }
         }
