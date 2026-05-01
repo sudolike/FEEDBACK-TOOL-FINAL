@@ -67,8 +67,11 @@ services:
       # ---- PAI EAS（仅在 AI_PROVIDER=pai-eas 时使用） ----
       - AI_EAS_ENDPOINT=${AI_EAS_ENDPOINT:-}
       - AI_EAS_TOKEN=${AI_EAS_TOKEN:-}
-      - AI_EAS_MODEL=${AI_EAS_MODEL:-default}
+      - AI_EAS_MODEL=${AI_EAS_MODEL:-Qwen3.5-0.8B}
       - AI_EAS_MODE=${AI_EAS_MODE:-openai}
+      - AI_EAS_THINKING=${AI_EAS_THINKING:-false}
+      - AI_EAS_MAX_TOKENS=${AI_EAS_MAX_TOKENS:-1024}
+      - AI_EAS_TIMEOUT_MS=${AI_EAS_TIMEOUT_MS:-180000}
       - MAIL_USERNAME=${MAIL_USERNAME:-}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-}
       - TZ=Asia/Shanghai

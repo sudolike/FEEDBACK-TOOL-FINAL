@@ -60,8 +60,19 @@ public class PaiEasAiClient implements AiClient {
     @Value("${ai.eas.mode:openai}")
     private String mode;
 
-    @Value("${ai.eas.timeoutMs:120000}")
+    @Value("${ai.eas.timeoutMs:180000}")
     private int timeoutMs;
+
+    /**
+     * 是否开启 Qwen3 / DeepSeek-R1 等思考模式。
+     * 默认 false：通过 vLLM 的 chat_template_kwargs.enable_thinking=false 走快速模式，
+     * 响应明显更快；当模型不支持该开关时该字段会被 jinja 模板静默忽略，无副作用。
+     */
+    @Value("${ai.eas.thinking:false}")
+    private boolean thinking;
+
+    @Value("${ai.eas.maxTokens:1024}")
+    private int maxTokens;
 
     @Override
     public String chat(String systemPrompt, List<AiMessage> messages) throws AiCallException {
@@ -97,17 +108,16 @@ public class PaiEasAiClient implements AiClient {
 
     /* -------------------- 协议构造 -------------------- */
 
-    /** 把 .../api/predict/<service> 重写为 .../v1/chat/completions */
+    /**
+     * EAS 上的 vLLM / OpenAI 兼容服务，标准路径是
+     *   <endpoint>/v1/chat/completions
+     * 这里 endpoint 一般包含 /api/predict/<svc> 前缀（EAS proxy 用它路由到容器），
+     * 必须保留前缀并直接追加 /v1/chat/completions（不要剥前缀！）。
+     */
     private String toOpenAiUrl(String raw) {
         String u = raw.trim();
-        int idx = u.indexOf("/api/predict/");
-        if (idx > 0) {
-            return u.substring(0, idx) + "/v1/chat/completions";
-        }
-        // 已经是 /v1/...，原样返回
         if (u.contains("/v1/chat/completions")) return u;
-        // 否则按"基础 URL + /v1/chat/completions"拼
-        if (u.endsWith("/")) return u + "v1/chat/completions";
+        while (u.endsWith("/")) u = u.substring(0, u.length() - 1);
         return u + "/v1/chat/completions";
     }
 
@@ -116,6 +126,13 @@ public class PaiEasAiClient implements AiClient {
         body.put("model", model);
         body.put("stream", false);
         body.put("top_p", 0.9);
+        if (maxTokens > 0) body.put("max_tokens", maxTokens);
+
+        // vLLM 扩展：透传 chat_template 参数（Qwen3 thinking switch 等）。
+        // 服务端模型若无对应模板字段，会被 jinja 静默忽略，不会报错。
+        JSONObject ctk = new JSONObject();
+        ctk.put("enable_thinking", thinking);
+        body.put("chat_template_kwargs", ctk);
 
         JSONArray arr = new JSONArray();
         if (StrUtil.isNotBlank(systemPrompt)) {
@@ -210,8 +227,22 @@ public class PaiEasAiClient implements AiClient {
             }
             JSONObject ch0 = choices.getJSONObject(0);
             JSONObject msg = ch0.getJSONObject("message");
-            if (msg != null && msg.containsKey("content")) {
-                return msg.getString("content");
+            if (msg != null) {
+                // 优先取 message.content
+                String content = msg.getString("content");
+                if (content != null && !content.trim().isEmpty()) {
+                    return content;
+                }
+                // Qwen3 / DeepSeek-R1 等思考模型在 thinking 模式下，
+                // content=null，真正回答放在 reasoning / reasoning_content 字段。
+                String reasoning = msg.getString("reasoning");
+                if (reasoning != null && !reasoning.trim().isEmpty()) {
+                    return reasoning;
+                }
+                String reasoningContent = msg.getString("reasoning_content");
+                if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
+                    return reasoningContent;
+                }
             }
             // 部分 OpenAI 兼容服务把内容放在 ch0.text
             if (ch0.containsKey("text")) return ch0.getString("text");

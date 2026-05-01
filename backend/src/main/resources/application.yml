@@ -69,16 +69,23 @@ ai:
   model: ${AI_MODEL:qwen-plus}
   eas:
     # PAI EAS 公网调用地址，例如 http://<id>.cn-hangzhou.pai-eas.aliyuncs.com/api/predict/<service>
+    # （EAS 部署 vLLM 时无需手动加 /v1/chat/completions，代码会自动追加）
     endpoint: ${AI_EAS_ENDPOINT:}
-    # PAI EAS Token（控制台「调用信息」中复制）
+    # PAI EAS Token（控制台「调用信息」中复制，原样粘贴，无需 Bearer 前缀）
     token: ${AI_EAS_TOKEN:}
-    # 部署模型名（OpenAI 兼容模式下用作 messages 的 model 字段；原生 predict 模式可任填）
-    model: ${AI_EAS_MODEL:default}
+    # 部署模型名。OpenAI 兼容模式下作为 messages 的 model 字段必填项；
+    # 可通过 GET <endpoint>/v1/models 查到具体名称（如 Qwen3.5-0.8B）
+    model: ${AI_EAS_MODEL:Qwen3.5-0.8B}
     # openai | predict
-    #   openai  ：自动把 endpoint 末尾 /api/predict/<svc> 换成 /v1/chat/completions
+    #   openai  ：在 endpoint 后追加 /v1/chat/completions（vLLM / TGI / 通义官方蓝图）
     #   predict ：直接 POST 到 endpoint，body 同时携带 prompt/system/history/messages
     mode: ${AI_EAS_MODE:openai}
-    timeoutMs: ${AI_EAS_TIMEOUT_MS:120000}
+    # Qwen3 / DeepSeek-R1 等模型的"思考模式"。
+    # false（默认）→ chat_template_kwargs.enable_thinking=false，响应快很多；
+    # true        → 走 reasoning，更慢但答复更"完整"。
+    thinking: ${AI_EAS_THINKING:false}
+    maxTokens: ${AI_EAS_MAX_TOKENS:1024}
+    timeoutMs: ${AI_EAS_TIMEOUT_MS:180000}
 
 # 通义千问 API Key（仅在 ai.provider=dashscope 时生效）
 ai-api-key: "${AI_API_KEY:}"
