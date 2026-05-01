@@ -60,8 +60,15 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=
       - FILES_UPLOAD_PATH=/data/files/
-      - AI_API_KEY=${AI_API_KEY:-sk-efffabfede29422f86ac2f9c82771a78}
+      # ---- AI Provider ----
+      - AI_PROVIDER=${AI_PROVIDER:-dashscope}
       - AI_MODEL=${AI_MODEL:-qwen-plus}
+      - AI_API_KEY=${AI_API_KEY:-}
+      # ---- PAI EAS（仅在 AI_PROVIDER=pai-eas 时使用） ----
+      - AI_EAS_ENDPOINT=${AI_EAS_ENDPOINT:-}
+      - AI_EAS_TOKEN=${AI_EAS_TOKEN:-}
+      - AI_EAS_MODEL=${AI_EAS_MODEL:-default}
+      - AI_EAS_MODE=${AI_EAS_MODE:-openai}
       - MAIL_USERNAME=${MAIL_USERNAME:-}
       - MAIL_PASSWORD=${MAIL_PASSWORD:-}
       - TZ=Asia/Shanghai

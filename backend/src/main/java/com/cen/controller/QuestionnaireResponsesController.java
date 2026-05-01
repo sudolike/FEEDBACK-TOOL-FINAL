@@ -6,7 +6,6 @@ import com.cen.common.Constants;
 import com.cen.controller.dto.QuestionnaireResponseDetailDTO;
 import com.cen.controller.dto.QuestionnaireResponseSummaryDTO;
 import com.cen.exception.ServiceException;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.cen.common.Result;
@@ -24,13 +23,8 @@ import com.cen.service.IQuestionnaireResponsesService;
 import com.cen.entity.QuestionnaireResponses;
 import com.cen.entity.Questionnaires;
 import com.cen.mapper.QuestionnairesMapper;
-import com.alibaba.dashscope.aigc.generation.Generation;
-import com.alibaba.dashscope.aigc.generation.GenerationParam;
-import com.alibaba.dashscope.aigc.generation.GenerationResult;
-import com.alibaba.dashscope.common.Message;
-import com.alibaba.dashscope.common.Role;
-import com.alibaba.dashscope.exception.InputRequiredException;
-import com.alibaba.dashscope.exception.NoApiKeyException;
+import com.cen.ai.AiClient;
+import com.cen.ai.AiMessage;
 
 import java.time.LocalDateTime;
 import org.springframework.web.bind.annotation.RestController;
@@ -47,14 +41,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/questionnaireResponses")
 public class QuestionnaireResponsesController {
 
-    @Value("${ai-api-key}")
-    private String apiKey;
-
     @Resource
     private IQuestionnaireResponsesService questionnaireResponsesService;
 
     @Resource
-    private Generation generation;
+    private AiClient aiClient;
 
     @Resource
     private QuestionnairesMapper questionnairesMapper;
@@ -265,7 +256,7 @@ public class QuestionnaireResponsesController {
     /** 在线 AI 分析（失败 → 返回空串；不影响逐题统计返回） */
     private String tryAiQuestionnaireAnalysis(Questionnaires questionnaire,
                                               QuestionnaireResponseSummaryDTO responses) {
-        if (apiKey == null || apiKey.trim().isEmpty()) return "";
+        if (!aiClient.isReady()) return "";
         try {
             StringBuilder aiInput = new StringBuilder();
             aiInput.append("请用中文为下面这份课程问卷给出 1) 整体满意度概述（3 句以内）；")
@@ -284,22 +275,11 @@ public class QuestionnaireResponsesController {
                 }
             }
 
-            Message userMessage = Message.builder()
-                    .role(Role.USER.getValue())
-                    .content(aiInput.toString())
-                    .build();
-            GenerationParam param = GenerationParam.builder()
-                    .model("qwen-turbo")
-                    .messages(Arrays.asList(userMessage))
-                    .resultFormat(GenerationParam.ResultFormat.MESSAGE)
-                    .topP(0.8)
-                    .apiKey(apiKey)
-                    .build();
-            GenerationResult result = generation.call(param);
-            String text = result.getOutput().getChoices().get(0).getMessage().getContent();
+            String text = aiClient.chat(
+                    "你是面向高校的教学评估专家，回答必须基于给定数据，禁止编造。",
+                    Arrays.asList(AiMessage.user(aiInput.toString())));
             return text == null ? "" : text;
         } catch (Exception e) {
-            // AI 不可用不阻塞主流程
             return "";
         }
     }
@@ -308,21 +288,14 @@ public class QuestionnaireResponsesController {
 
     /**
      * AI对比分析多个问卷填写情况
-     * 使用阿里通义千问AI对多个问卷的填写情况进行对比分析
-     * 支持自定义分析描述，指导AI关注特定分析维度
-     * 
-     * @param courseIds 课程ID列表
-     * @param questionnaireIds 问卷ID列表
-     * @param analysisDescription 可选的自定义分析描述，指导AI分析的方向和重点
-     * @return 包含所有问卷信息和AI对比分析结果的数据
-     * @throws NoApiKeyException API密钥不存在或无效时抛出
-     * @throws InputRequiredException 输入参数缺失或格式错误时抛出
+     * 通过统一的 AiClient（dashscope / pai-eas）对多个问卷的填写情况进行对比分析。
+     * 支持自定义分析描述，指导AI关注特定分析维度。
      */
     @GetMapping("/compareAnalysis")
     public Result compareQuestionnaireAnalysis(
             @RequestParam List<Long> courseIds,
             @RequestParam List<Long> questionnaireIds,
-            @RequestParam(required = false) String analysisDescription) throws NoApiKeyException, InputRequiredException {
+            @RequestParam(required = false) String analysisDescription) {
         // 1. 验证参数
         if (courseIds.size() != questionnaireIds.size()) {
             throw new ServiceException(Constants.CODE_400, "课程和问卷数量不匹配");
@@ -383,55 +356,39 @@ public class QuestionnaireResponsesController {
             aiInput.append("4. 总体趋势和特点\n"); // 总结整体趋势
             aiInput.append("5. 改进建议\n\n"); // 提供具体改进建议
         }
-        System.out.println(aiInput.toString()+ "--------sa");
-        // 4. 调用阿里通义千问AI进行分析
-        // 构建用户消息对象，包含我们构建的提示词
-        Message userMessage = Message.builder()
-                .role(Role.USER.getValue()) // 设置消息角色为用户
-                .content(aiInput.toString()) // 设置消息内容为构建的提示词
-                .build();
-
-        // 配置AI生成参数
-        GenerationParam param = GenerationParam.builder()
-                .model("qwen-turbo") // 使用通义千问的高效模型
-                .messages(Arrays.asList(userMessage)) // 设置消息历史
-                .resultFormat(GenerationParam.ResultFormat.MESSAGE) // 设置返回格式为消息格式
-                .topP(0.8) // 设置生成多样性参数
-                .apiKey(apiKey) // 设置API密钥
-                .enableSearch(true) // 启用互联网搜索，增强分析能力
-                .build();
-
-        GenerationResult generationResult = generation.call(param);
-        String analysis = generationResult.getOutput().getChoices().get(0).getMessage().getContent();
+        // 4. 调用 AiClient 进行分析（dashscope / pai-eas，由 ai.provider 决定）
+        String analysis;
+        if (!aiClient.isReady()) {
+            analysis = "";
+        } else {
+            try {
+                analysis = aiClient.chat(
+                        "You are an education assessment expert; analyze faithfully without fabrication.",
+                        Arrays.asList(AiMessage.user(aiInput.toString())));
+            } catch (Exception e) {
+                analysis = "";
+            }
+        }
 
         // 5. 返回分析结果
         Map<String, Object> result = new HashMap<>();
         result.put("questionnaires", questionnairesData);
-        result.put("analysis", analysis);
-        
+        result.put("analysis", analysis == null ? "" : analysis);
+
         return Result.success(result);
     }
 
     /**
      * 处理CSV文件批量分析
-     * 使用阿里通义千问AI对上传的CSV文件数据进行批量分析
-     * 适用于教师上传大量数据进行综合分析的场景
-     * 
-     * @param files 上传的CSV文件列表
-     * @return AI分析结果
-     * @throws NoApiKeyException API密钥不存在或无效时抛出
-     * @throws InputRequiredException 输入参数缺失或格式错误时抛出
-     * @throws ServiceException 文件处理过程中的异常
+     * 通过统一的 AiClient 对上传的 CSV 数据进行批量分析。
      */
     @PostMapping("/teacher/bulk-analysis")
-    public Result bulkAnalysis(@RequestParam("files[]") List<MultipartFile> files) throws NoApiKeyException, InputRequiredException {
+    public Result bulkAnalysis(@RequestParam("files[]") List<MultipartFile> files) {
         if (files == null || files.isEmpty()) {
             throw new ServiceException(Constants.CODE_400, "请上传至少一个CSV文件");
         }
 
-        // 构建CSV文件分析的AI输入内容（预设指令）
         StringBuilder aiInput = new StringBuilder();
-        // 设置AI分析CSV数据的主要任务和输出要求（使用英文输出）
         aiInput.append("请分析以下CSV文件数据并给出专业的分析报告。注意全文用英文输出：\n\n");
 
         try {
@@ -440,28 +397,20 @@ public class QuestionnaireResponsesController {
                 aiInput.append("文件名：").append(file.getOriginalFilename()).append("\n");
                 aiInput.append("文件内容：\n").append(content).append("\n\n");
             }
-
-            // 调用AI进行分析
-            Message userMessage = Message.builder()
-                    .role(Role.USER.getValue())
-                    .content(aiInput.toString())
-                    .build();
-
-            GenerationParam param = GenerationParam.builder()
-                    .model("qwen-turbo")
-                    .messages(Arrays.asList(userMessage))
-                    .resultFormat(GenerationParam.ResultFormat.MESSAGE)
-                    .topP(0.8)
-                    .apiKey(apiKey)
-                    .enableSearch(true)
-                    .build();
-
-            GenerationResult generationResult = generation.call(param);
-            String analysis = generationResult.getOutput().getChoices().get(0).getMessage().getContent();
-
-            return Result.success(analysis);
         } catch (IOException e) {
             throw new ServiceException(Constants.CODE_500, "文件读取失败：" + e.getMessage());
+        }
+
+        if (!aiClient.isReady()) {
+            return Result.success("AI service is currently unavailable. Please configure provider first.");
+        }
+        try {
+            String analysis = aiClient.chat(
+                    "You are a senior data analyst.",
+                    Arrays.asList(AiMessage.user(aiInput.toString())));
+            return Result.success(analysis == null ? "" : analysis);
+        } catch (Exception e) {
+            return Result.success("AI analysis failed: " + e.getMessage());
         }
     }
 }

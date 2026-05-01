@@ -1,11 +1,8 @@
 package com.cen.service.impl;
 
 import cn.hutool.core.util.StrUtil;
-import com.alibaba.dashscope.aigc.generation.Generation;
-import com.alibaba.dashscope.aigc.generation.GenerationParam;
-import com.alibaba.dashscope.aigc.generation.GenerationResult;
-import com.alibaba.dashscope.common.Message;
-import com.alibaba.dashscope.common.Role;
+import com.cen.ai.AiClient;
+import com.cen.ai.AiMessage;
 import com.cen.controller.dto.ChatRequestDTO;
 import com.cen.controller.dto.ChatResponseDTO;
 import com.cen.entity.ChatMessage;
@@ -45,13 +42,7 @@ public class AssistantServiceImpl implements IAssistantService {
     private static final long DEMO_RECOMMEND_ID = 910002L;
     private static final long DEMO_DIFFICULTY_ID = 910003L;
 
-    @Value("${ai-api-key:}")
-    private String apiKey;
-
-    @Value("${ai.model:qwen-plus}")
-    private String model;
-
-    @Resource private Generation generation;
+    @Resource private AiClient aiClient;
     @Resource private IKnowledgeBaseService knowledgeBaseService;
     @Resource private ChatMessageMapper chatMessageMapper;
     @Resource private QuestionnairesMapper questionnairesMapper;
@@ -72,15 +63,12 @@ public class AssistantServiceImpl implements IAssistantService {
         List<KbChunk> citations = knowledgeBaseService.search(req.getMessage(), req.getCourseId(), 5);
 
         // 2) 组装 messages：system / 历史 / 用户消息（带检索片段）
-        List<Message> messages = new ArrayList<>();
-        messages.add(systemMessage(req.getRole(), req.getScene()));
+        String systemPrompt = buildSystemPrompt(req.getRole(), req.getScene());
+        List<AiMessage> messages = new ArrayList<>();
 
         if (req.getHistory() != null) {
             for (ChatRequestDTO.ChatTurn turn : req.getHistory()) {
-                messages.add(Message.builder()
-                        .role(safeRole(turn.getRole()))
-                        .content(turn.getContent())
-                        .build());
+                messages.add(new AiMessage(safeRole(turn.getRole()), turn.getContent()));
             }
         }
 
@@ -112,37 +100,29 @@ public class AssistantServiceImpl implements IAssistantService {
 
         userMsg.append("【用户问题】").append(req.getMessage());
 
-        messages.add(Message.builder().role(Role.USER.getValue()).content(userMsg.toString()).build());
+        messages.add(AiMessage.user(userMsg.toString()));
 
-        // 3) 调用通义千问
+        // 3) 调用 AI（dashscope / pai-eas，由 ai.provider 决定）
         String reply;
         // demo fallback 仅在用户提问明确指向 HKU 示例课程时才触发，避免任意提问被 demo 截胡。
         String demoFallbackReply = buildDemoFallbackReply(req.getMessage(), citations);
         String genericFallback = buildGenericFallbackReply(citations);
-        if (StrUtil.isBlank(apiKey)) {
+        if (!aiClient.isReady()) {
             reply = demoFallbackReply != null
                     ? demoFallbackReply
                     : (genericFallback != null
                         ? genericFallback
-                        : "AI 服务暂不可用，请先配置 AI_API_KEY 后重试。");
+                        : "AI 服务暂不可用，请联系管理员配置 AI provider 后重试。");
         } else {
             try {
-                GenerationParam param = GenerationParam.builder()
-                        .apiKey(apiKey)
-                        .model(model)
-                        .messages(messages)
-                        .resultFormat(GenerationParam.ResultFormat.MESSAGE)
-                        .topP(0.9)
-                        .build();
-                GenerationResult result = generation.call(param);
-                reply = result.getOutput().getChoices().get(0).getMessage().getContent();
+                reply = aiClient.chat(systemPrompt, messages);
                 if (StrUtil.isBlank(reply)) {
                     reply = genericFallback != null
                             ? genericFallback
                             : (demoFallbackReply != null ? demoFallbackReply : "AI 服务暂不可用，请稍后再试。");
                 }
             } catch (Exception e) {
-                log.error("AI 调用失败", e);
+                log.error("AI 调用失败 (provider={})", aiClient.providerName(), e);
                 // 调用失败时优先给"基于检索资料"的通用兜底，最后才考虑 demo 文案
                 reply = genericFallback != null
                         ? genericFallback
@@ -215,24 +195,15 @@ public class AssistantServiceImpl implements IAssistantService {
                 "问卷题目 (JSON)：\n" + (q.getQuestions() == null ? "" : q.getQuestions()) +
                 "\n\n答案集合（共 " + list.size() + " 份，每条用 ---- 分隔）：\n" + combined;
 
-        // 调用 LLM；失败/未配置 key 时回退到基于真实数据的本地汇总（绝不返回 RAG 检索结果）
-        if (StrUtil.isBlank(apiKey)) {
+        // 调用 AI；失败/未配置时回退到基于真实数据的本地汇总（绝不返回 RAG 检索结果）
+        if (!aiClient.isReady()) {
             return localQuestionnaireSummary(q, list);
         }
         try {
-            List<Message> messages = new ArrayList<>();
-            messages.add(Message.builder().role(Role.SYSTEM.getValue())
-                    .content("你是面向高校的教学评估专家，回答必须基于给定数据，禁止编造。").build());
-            messages.add(Message.builder().role(Role.USER.getValue()).content(prompt).build());
-            GenerationParam param = GenerationParam.builder()
-                    .apiKey(apiKey)
-                    .model(model)
-                    .messages(messages)
-                    .resultFormat(GenerationParam.ResultFormat.MESSAGE)
-                    .topP(0.8)
-                    .build();
-            GenerationResult result = generation.call(param);
-            String reply = result.getOutput().getChoices().get(0).getMessage().getContent();
+            List<AiMessage> msgs = new ArrayList<>();
+            msgs.add(AiMessage.user(prompt));
+            String systemPrompt = "你是面向高校的教学评估专家，回答必须基于给定数据，禁止编造。";
+            String reply = aiClient.chat(systemPrompt, msgs);
             if (StrUtil.isBlank(reply)) {
                 return localQuestionnaireSummary(q, list);
             }
@@ -350,7 +321,7 @@ public class AssistantServiceImpl implements IAssistantService {
         return sb.toString();
     }
 
-    private Message systemMessage(String role, String scene) {
+    private String buildSystemPrompt(String role, String scene) {
         String r = "student".equals(role) ? "学生" : "teacher".equals(role) ? "教师" : "用户";
         StringBuilder sb = new StringBuilder();
         sb.append("你是一个面向高校《课程反馈管理系统》的 AI 助理。当前对话方角色：").append(r).append("。");
@@ -360,15 +331,15 @@ public class AssistantServiceImpl implements IAssistantService {
           .append("5) 教师场景下擅长归纳问卷反馈、给出教学改进建议、识别共性问题。");
         if ("recommend".equals(scene)) sb.append("当前任务是：基于评价库给出选课推荐与难度评估。");
         if ("summarize".equals(scene)) sb.append("当前任务是：归纳问卷统计结果。");
-        return Message.builder().role(Role.SYSTEM.getValue()).content(sb.toString()).build();
+        return sb.toString();
     }
 
     private String safeRole(String r) {
-        if (r == null) return Role.USER.getValue();
+        if (r == null) return "user";
         switch (r.toLowerCase()) {
-            case "system": return Role.SYSTEM.getValue();
-            case "assistant": return Role.ASSISTANT.getValue();
-            default: return Role.USER.getValue();
+            case "system": return "system";
+            case "assistant": return "assistant";
+            default: return "user";
         }
     }
 
