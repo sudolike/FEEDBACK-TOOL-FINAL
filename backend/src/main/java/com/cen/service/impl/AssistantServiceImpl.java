@@ -10,12 +10,14 @@ import com.cen.controller.dto.ChatRequestDTO;
 import com.cen.controller.dto.ChatResponseDTO;
 import com.cen.entity.ChatMessage;
 import com.cen.entity.CourseFeedback;
+import com.cen.entity.CourseQuestionnaire;
 import com.cen.entity.Courses;
 import com.cen.entity.KbChunk;
 import com.cen.entity.QuestionnaireResponses;
 import com.cen.entity.Questionnaires;
 import com.cen.mapper.ChatMessageMapper;
 import com.cen.mapper.CourseFeedbackMapper;
+import com.cen.mapper.CourseQuestionnaireMapper;
 import com.cen.mapper.CoursesMapper;
 import com.cen.mapper.QuestionnaireResponsesMapper;
 import com.cen.mapper.QuestionnairesMapper;
@@ -56,6 +58,7 @@ public class AssistantServiceImpl implements IAssistantService {
     @Resource private QuestionnaireResponsesMapper questionnaireResponsesMapper;
     @Resource private CoursesMapper coursesMapper;
     @Resource private CourseFeedbackMapper courseFeedbackMapper;
+    @Resource private CourseQuestionnaireMapper courseQuestionnaireMapper;
 
     @Override
     public ChatResponseDTO chat(ChatRequestDTO req) {
@@ -96,7 +99,13 @@ public class AssistantServiceImpl implements IAssistantService {
         // 教师场景的 query routing：
         // 当老师在通用 AI 助手里问"问卷反馈/学生评价/总结改进"等意图时，
         // 自动注入这位老师近期课程的真实问卷答案与课程评价，避免 LLM 凭空作答。
-        String teacherCtx = buildTeacherFeedbackContext(req);
+        // 包一层 try 兜底：即便 routing 内部数据访问异常，也不能让整个 /assistant/chat 500。
+        String teacherCtx = null;
+        try {
+            teacherCtx = buildTeacherFeedbackContext(req);
+        } catch (Exception e) {
+            log.warn("buildTeacherFeedbackContext 失败，跳过教师反馈注入：{}", e.getMessage());
+        }
         if (teacherCtx != null) {
             userMsg.append(teacherCtx);
         }
@@ -492,11 +501,17 @@ public class AssistantServiceImpl implements IAssistantService {
                 }
             }
 
-            // 2) 该课程下问卷答案（取近期 3 份问卷，每份最多 40 条匿名答案）
-            QueryWrapper<Questionnaires> qq = new QueryWrapper<>();
-            qq.eq("course_id", c.getId()).orderByDesc("id").last("LIMIT 3");
-            List<Questionnaires> qs = questionnairesMapper.selectList(qq);
-            for (Questionnaires q : qs) {
+            // 2) 该课程下问卷答案
+            //    sys_questionnaires 是问卷模板表（无 course_id），
+            //    课程↔问卷的绑定在中间表 sys_course_questionnaire 中，
+            //    所以这里要先通过中间表拿到该课程绑定的问卷 id。
+            QueryWrapper<CourseQuestionnaire> cqq = new QueryWrapper<>();
+            cqq.eq("course_id", c.getId()).orderByDesc("id").last("LIMIT 3");
+            List<CourseQuestionnaire> binds = courseQuestionnaireMapper.selectList(cqq);
+            for (CourseQuestionnaire bind : binds) {
+                if (bind.getQuestionnaireId() == null) continue;
+                Questionnaires q = questionnairesMapper.selectById(bind.getQuestionnaireId());
+                if (q == null) continue;
                 QueryWrapper<QuestionnaireResponses> rq = new QueryWrapper<>();
                 rq.eq("course_id", c.getId()).eq("questionnaire_id", q.getId())
                         .orderByDesc("id").last("LIMIT " + RESPONSE_LIMIT_PER_QUEST);
