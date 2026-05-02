@@ -18,6 +18,29 @@ REM Enable BuildKit so Dockerfile --mount=type=cache (Maven cache reuse) works
 set DOCKER_BUILDKIT=1
 set COMPOSE_DOCKER_CLI_BUILD=1
 
+REM Clean orphan wslrelay listeners on 9091 (Docker Desktop / WSL2 sometimes
+REM leaves wslrelay.exe holding 127.0.0.1:9091 and silently hijacks all
+REM localhost traffic, returning 404 even though the container is healthy).
+echo [INFO] Cleaning stale listeners on port 9091...
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr "127.0.0.1:9091" ^| findstr "LISTENING"') do (
+  for /f "tokens=1" %%N in ('tasklist /FI "PID eq %%P" /FO CSV /NH 2^>nul') do (
+    set NAME=%%N
+    if /I not "!NAME!"=="\"docker-proxy.exe\"" (
+      echo   killing stale !NAME! PID %%P
+      taskkill /PID %%P /F >nul 2>&1
+    )
+  )
+)
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr "::1]:9091" ^| findstr "LISTENING"') do (
+  for /f "tokens=1" %%N in ('tasklist /FI "PID eq %%P" /FO CSV /NH 2^>nul') do (
+    set NAME=%%N
+    if /I not "!NAME!"=="\"docker-proxy.exe\"" (
+      echo   killing stale !NAME! PID %%P (ipv6)
+      taskkill /PID %%P /F >nul 2>&1
+    )
+  )
+)
+
 echo [INFO] Building and starting containers...
 docker compose --env-file .env up -d --build
 if errorlevel 1 (

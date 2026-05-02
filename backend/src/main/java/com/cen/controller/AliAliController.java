@@ -6,7 +6,7 @@ import com.cen.common.Result;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
@@ -17,9 +17,10 @@ import java.util.Map;
 /**
  * 通用 AI 对话调试入口（保留作为 smoke-test）。
  * 实际后端调用统一走 {@link AiClient}，由 {@code ai.provider} 配置切换 dashscope / pai-eas。
+ *
+ * 注意：所有方法都使用绝对路径，避免 @RequestMapping(class-level) 与 method-level 路径合并时的歧义。
  */
 @RestController
-@RequestMapping("ai/")
 public class AliAliController {
 
     @Resource
@@ -28,7 +29,7 @@ public class AliAliController {
     /**
      * 简易 AI 测试接口：前端发文本，后端调当前 provider 返回回答。
      */
-    @PostMapping(value = "aliTyqw")
+    @PostMapping("/ai/aliTyqw")
     public String send(@RequestBody String content) {
         if (!aiClient.isReady()) {
             return "AI 服务暂未配置，请检查 ai.provider 与对应 endpoint/token";
@@ -47,7 +48,7 @@ public class AliAliController {
      * 例：GET /ai/status →
      *   { code:200, data:{ provider:"pai-eas[openai]", ready:true } }
      */
-    @GetMapping("status")
+    @GetMapping("/ai/status")
     public Result status() {
         Map<String, Object> body = new HashMap<>();
         body.put("provider", aiClient.providerName());
@@ -59,8 +60,8 @@ public class AliAliController {
      * 探活进阶：实际打一次 LLM，确认网络/认证/解析全链路可用。
      * 例：GET /ai/ping?msg=hi
      */
-    @GetMapping("ping")
-    public Result ping(@org.springframework.web.bind.annotation.RequestParam(defaultValue = "ping") String msg) {
+    @GetMapping("/ai/ping")
+    public Result ping(@RequestParam(defaultValue = "ping") String msg) {
         Map<String, Object> body = new HashMap<>();
         body.put("provider", aiClient.providerName());
         body.put("ready", aiClient.isReady());
