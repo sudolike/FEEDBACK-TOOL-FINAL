@@ -51,7 +51,6 @@ class TeacherHomeViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow(TeacherHomeUi())
     val state = _state.asStateFlow()
-    init { refresh() }
     fun refresh() = viewModelScope.launch {
         _state.update { it.copy(loading = true) }
         runCatching {
@@ -74,6 +73,8 @@ fun TeacherHomeScreen(
     vm: TeacherHomeViewModel = hiltViewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
+    // 每次进入 Dashboard tab（包括从 Surveys / Courses 切换回来）都拉一次最新数据
+    LaunchedEffect(Unit) { vm.refresh() }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 96.dp),

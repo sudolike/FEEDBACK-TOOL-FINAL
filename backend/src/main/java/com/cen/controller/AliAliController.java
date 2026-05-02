@@ -2,6 +2,8 @@ package com.cen.controller;
 
 import com.cen.ai.AiClient;
 import com.cen.ai.AiMessage;
+import com.cen.common.Result;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -9,6 +11,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 通用 AI 对话调试入口（保留作为 smoke-test）。
@@ -36,5 +40,46 @@ public class AliAliController {
         } catch (Exception e) {
             return "AI 调用失败：" + e.getMessage();
         }
+    }
+
+    /**
+     * 探活：返回当前激活的 provider + 是否就绪。无需 token 即可访问，便于排错。
+     * 例：GET /ai/status →
+     *   { code:200, data:{ provider:"pai-eas[openai]", ready:true } }
+     */
+    @GetMapping("status")
+    public Result status() {
+        Map<String, Object> body = new HashMap<>();
+        body.put("provider", aiClient.providerName());
+        body.put("ready", aiClient.isReady());
+        return Result.success(body);
+    }
+
+    /**
+     * 探活进阶：实际打一次 LLM，确认网络/认证/解析全链路可用。
+     * 例：GET /ai/ping?msg=hi
+     */
+    @GetMapping("ping")
+    public Result ping(@org.springframework.web.bind.annotation.RequestParam(defaultValue = "ping") String msg) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("provider", aiClient.providerName());
+        body.put("ready", aiClient.isReady());
+        if (!aiClient.isReady()) {
+            body.put("ok", false);
+            body.put("error", "provider 未配置就绪");
+            return Result.success(body);
+        }
+        try {
+            long t0 = System.currentTimeMillis();
+            String reply = aiClient.chat(null,
+                    Collections.singletonList(AiMessage.user(msg)));
+            body.put("ok", true);
+            body.put("latencyMs", System.currentTimeMillis() - t0);
+            body.put("replyPreview", reply == null ? "" : (reply.length() > 200 ? reply.substring(0, 200) + "..." : reply));
+        } catch (Exception e) {
+            body.put("ok", false);
+            body.put("error", e.getMessage());
+        }
+        return Result.success(body);
     }
 }

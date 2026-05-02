@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +38,12 @@ public class DashScopeAiClient implements AiClient {
 
     @Resource
     private Generation generation;
+
+    @PostConstruct
+    public void printStartupBanner() {
+        log.info("[AI Provider] dashscope ready={} model={} apiKeyLen={}",
+                isReady(), model, apiKey == null ? 0 : apiKey.length());
+    }
 
     @Override
     public String chat(String systemPrompt, List<AiMessage> messages) throws AiCallException {

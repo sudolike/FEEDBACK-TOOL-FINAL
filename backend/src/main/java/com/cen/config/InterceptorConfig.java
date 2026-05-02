@@ -20,6 +20,8 @@ public class InterceptorConfig implements WebMvcConfigurer {
                         "/file/**",
                         "/webuser/list",
                         "/ai/aliTyqw",
+                        "/ai/status",
+                        "/ai/ping",
                         "/calendar/**",
                         "/error",
                         "/actuator/**"

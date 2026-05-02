@@ -54,7 +54,6 @@ class TeacherCourseListViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow(TeacherCourseListUi())
     val state = _state.asStateFlow()
-    init { refresh() }
 
     fun setFilter(f: String?) = _state.update { it.copy(filter = f) }
     fun refresh() = viewModelScope.launch {
@@ -73,6 +72,7 @@ fun TeacherCourseListScreen(
     vm: TeacherCourseListViewModel = hiltViewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.refresh() }
     val visible = remember(s.all, s.filter) {
         if (s.filter == null) s.all
         else s.all.filter { (it.status ?: "approved") == s.filter }

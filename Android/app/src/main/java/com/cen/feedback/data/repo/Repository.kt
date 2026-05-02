@@ -63,9 +63,21 @@ class FeedbackRepository @Inject constructor(
     suspend fun studentCourses(studentId: Long) = api.studentCourseList(studentId).unwrap()
     /** 兼容老调用：教师视角看自己已通过的课程（默认仅 approved） */
     suspend fun teacherCourses(teacherId: Long) = api.listCourses(teacherId).unwrap()
-    /** 教师查看自己提交过的所有课程（含 pending / rejected / approved） */
-    suspend fun teacherAllCourses(teacherId: Long? = null) =
-        api.teacherMyCourses(teacherId).unwrap()
+    /**
+     * 教师查看自己提交过的所有课程（含 pending / rejected / approved）。
+     *
+     * 兼容旧版后端：早期 jar 没有 /courses/teacher/my 路由，会返回 HTTP 404/405。
+     * 此时降级到 /courses/list?teacherId=xxx，至少能拿到已批准的课程。
+     */
+    suspend fun teacherAllCourses(teacherId: Long? = null): List<Courses> {
+        return try {
+            api.teacherMyCourses(teacherId).unwrap()
+        } catch (e: retrofit2.HttpException) {
+            if (e.code() == 404 || e.code() == 405) {
+                api.listCourses(teacherId = teacherId).unwrap()
+            } else throw e
+        }
+    }
     /** 教师提交课程申请（新建或重新提交） */
     suspend fun submitCourseProposal(req: CourseProposalRequest) =
         api.teacherSubmitCourse(req).unwrap()

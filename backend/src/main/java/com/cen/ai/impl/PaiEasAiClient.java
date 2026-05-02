@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -73,6 +74,17 @@ public class PaiEasAiClient implements AiClient {
 
     @Value("${ai.eas.maxTokens:1024}")
     private int maxTokens;
+
+    @PostConstruct
+    public void printStartupBanner() {
+        // 启动时一次性打印关键参数，便于在 docker logs 里直接确认 provider 是否生效
+        String safeEndpoint = endpoint == null || endpoint.length() < 28
+                ? endpoint
+                : endpoint.substring(0, 28) + "...";
+        log.info("[AI Provider] pai-eas ready={} mode={} thinking={} model={} endpoint={} tokenLen={}",
+                isReady(), mode, thinking, model, safeEndpoint,
+                token == null ? 0 : token.length());
+    }
 
     @Override
     public String chat(String systemPrompt, List<AiMessage> messages) throws AiCallException {

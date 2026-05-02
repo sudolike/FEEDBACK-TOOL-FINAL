@@ -41,7 +41,6 @@ class TeacherQuestionnaireListViewModel @Inject constructor(
 ) : ViewModel() {
     private val _state = MutableStateFlow(TeacherQuestionnaireListUi())
     val state = _state.asStateFlow()
-    init { refresh() }
     fun refresh() = viewModelScope.launch {
         _state.update { it.copy(loading = true) }
         runCatching {
@@ -63,6 +62,7 @@ fun TeacherQuestionnaireListScreen(
     vm: TeacherQuestionnaireListViewModel = hiltViewModel(),
 ) {
     val s by vm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.refresh() }
     Column(modifier = Modifier.fillMaxSize()) {
         GradientTopBar(
             title = "问卷模板",
