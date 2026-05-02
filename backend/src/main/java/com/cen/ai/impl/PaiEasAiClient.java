@@ -230,40 +230,132 @@ public class PaiEasAiClient implements AiClient {
     /* -------------------- 响应解析 -------------------- */
 
     private String parseOpenAiReply(String body) {
+        if (body == null || body.isEmpty()) {
+            throw new AiCallException("EAS 响应为空");
+        }
+        // 1) 严格 JSON 解析（90% 情况）
         try {
             JSONObject root = JSON.parseObject(body);
-            if (root == null) throw new AiCallException("EAS 响应为空");
-            JSONArray choices = root.getJSONArray("choices");
-            if (choices == null || choices.isEmpty()) {
-                throw new AiCallException("EAS 响应缺少 choices: " + safeBody(body));
-            }
-            JSONObject ch0 = choices.getJSONObject(0);
-            JSONObject msg = ch0.getJSONObject("message");
-            if (msg != null) {
-                // 优先取 message.content
-                String content = msg.getString("content");
-                if (content != null && !content.trim().isEmpty()) {
-                    return content;
-                }
-                // Qwen3 / DeepSeek-R1 等思考模型在 thinking 模式下，
-                // content=null，真正回答放在 reasoning / reasoning_content 字段。
-                String reasoning = msg.getString("reasoning");
-                if (reasoning != null && !reasoning.trim().isEmpty()) {
-                    return reasoning;
-                }
-                String reasoningContent = msg.getString("reasoning_content");
-                if (reasoningContent != null && !reasoningContent.trim().isEmpty()) {
-                    return reasoningContent;
+            if (root != null) {
+                JSONArray choices = root.getJSONArray("choices");
+                if (choices != null && !choices.isEmpty()) {
+                    JSONObject ch0 = choices.getJSONObject(0);
+                    JSONObject msg = ch0.getJSONObject("message");
+                    if (msg != null) {
+                        String content = msg.getString("content");
+                        if (content != null && !content.trim().isEmpty()) return content;
+                        // Qwen3 / DeepSeek-R1 等思考模型在 thinking 模式下，
+                        // content=null，真正回答放在 reasoning / reasoning_content 字段。
+                        String reasoning = msg.getString("reasoning");
+                        if (reasoning != null && !reasoning.trim().isEmpty()) return reasoning;
+                        String rc = msg.getString("reasoning_content");
+                        if (rc != null && !rc.trim().isEmpty()) return rc;
+                    }
+                    if (ch0.containsKey("text")) return ch0.getString("text");
                 }
             }
-            // 部分 OpenAI 兼容服务把内容放在 ch0.text
-            if (ch0.containsKey("text")) return ch0.getString("text");
-            throw new AiCallException("EAS 响应无可识别 content: " + safeBody(body));
-        } catch (AiCallException e) {
-            throw e;
         } catch (Exception e) {
-            throw new AiCallException("EAS OpenAI 响应解析失败: " + e.getMessage(), e);
+            // 长 prompt 时 EAS 偶发返回 unclosed string / 未转义换行，
+            // 这里不直接抛，下面用正则容错路径再捞一次 content。
+            log.warn("EAS OpenAI 严格解析失败 ({}), 退回正则容错。raw[:600]={}",
+                    e.getMessage(), safeBody(body, 600));
         }
+        // 2) 容错路径：正则抽 "content":"..."，
+        //    包括 body 被截断 / 字段未闭合的情况。
+        String extracted = extractContentLenient(body);
+        if (extracted != null && !extracted.trim().isEmpty()) {
+            log.info("EAS OpenAI 容错路径成功提取 content（长度 {}）", extracted.length());
+            return extracted;
+        }
+        throw new AiCallException("EAS OpenAI 响应解析失败，无法提取 content。raw[:500]="
+                + safeBody(body, 500));
+    }
+
+    /**
+     * 宽容地从 OpenAI 风格 body 中抽 content。
+     * 主要应对 PAI EAS 长输出时偶发的 unclosed string / 未转义换行：
+     *   - 优先匹配 message.content
+     *   - 否则匹配任何 content / reasoning / reasoning_content
+     *   - 如果起始 quote 找到但终止 quote 找不到（被截断），就取到 body 末尾
+     */
+    private String extractContentLenient(String body) {
+        if (body == null) return null;
+        String[] keys = {"content", "reasoning_content", "reasoning"};
+        for (String key : keys) {
+            String marker = "\"" + key + "\":\"";
+            int idx = body.indexOf(marker);
+            // 兼容带空格 "content" : "
+            if (idx < 0) {
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                        .compile("\"" + key + "\"\\s*:\\s*\"")
+                        .matcher(body);
+                if (m.find()) idx = m.start();
+                else continue;
+                int afterKey = body.indexOf('"', idx + key.length() + 2);
+                if (afterKey < 0) continue;
+                idx = afterKey + 1;
+            } else {
+                idx += marker.length();
+            }
+            int end = findUnescapedQuote(body, idx);
+            String raw;
+            if (end < 0) {
+                // 被截断 —— 取到末尾，去掉可能的尾部噪声
+                raw = body.substring(idx);
+                log.warn("EAS body 字段 {} 未闭合（响应被截断），按截断内容返回", key);
+            } else {
+                raw = body.substring(idx, end);
+            }
+            String unescaped = unescapeJsonStringLite(raw);
+            if (!unescaped.trim().isEmpty()) return unescaped;
+        }
+        return null;
+    }
+
+    /** 在 JSON 字符串里找下一个未转义的双引号；找不到返回 -1。 */
+    private int findUnescapedQuote(String s, int from) {
+        int i = from;
+        while (i < s.length()) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < s.length()) { i += 2; continue; }
+            if (c == '"') return i;
+            i++;
+        }
+        return -1;
+    }
+
+    /** 简化版 JSON 字符串反转义（覆盖 LLM 输出 99% 的常见转义）。 */
+    private String unescapeJsonStringLite(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder(s.length());
+        int i = 0;
+        while (i < s.length()) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < s.length()) {
+                char n = s.charAt(i + 1);
+                switch (n) {
+                    case 'n': sb.append('\n'); break;
+                    case 't': sb.append('\t'); break;
+                    case 'r': sb.append('\r'); break;
+                    case '"': sb.append('"'); break;
+                    case '\\': sb.append('\\'); break;
+                    case '/': sb.append('/'); break;
+                    case 'u':
+                        if (i + 5 < s.length()) {
+                            try {
+                                sb.append((char) Integer.parseInt(s.substring(i + 2, i + 6), 16));
+                                i += 6; continue;
+                            } catch (NumberFormatException ignore) { sb.append(c); }
+                        } else sb.append(c);
+                        break;
+                    default: sb.append(n);
+                }
+                i += 2;
+            } else {
+                sb.append(c); i++;
+            }
+        }
+        return sb.toString();
     }
 
     /**
@@ -381,7 +473,11 @@ public class PaiEasAiClient implements AiClient {
     }
 
     private static String safeBody(String s) {
+        return safeBody(s, 1000);
+    }
+
+    private static String safeBody(String s, int max) {
         if (s == null) return "";
-        return s.length() > 1000 ? s.substring(0, 1000) + "..." : s;
+        return s.length() > max ? s.substring(0, max) + "..." : s;
     }
 }

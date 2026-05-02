@@ -179,21 +179,23 @@ public class AssistantServiceImpl implements IAssistantService {
         List<QuestionnaireResponses> list = questionnaireResponsesMapper.selectList(qw);
         if (list.isEmpty()) return "暂无问卷答案，无法总结";
 
-        // 直接构造完整 prompt 调用 LLM —— 故意绕开 chat() 走 RAG 检索
-        // （问卷答案本身已经是完整数据，再做 RAG 反而会混入无关课程内容）
-        String combined = list.stream().limit(80).map(QuestionnaireResponses::getAnswers)
-                .filter(s -> s != null && !s.isEmpty())
-                .collect(Collectors.joining("\n----\n"));
+        // 把题目结构 + 学生答案拼成 LLM 易读的"题目→答案"配对，
+        // 避免它面对裸 JSON 时无法理解题目和答案的对应关系（之前会出现
+        // "无法找到任何覆盖特定课程名下的学生问卷"这种典型误判）。
+        String readable = buildReadableQuestionnaireData(q, list);
 
-        String prompt = "你是教学评估专家。下面是某门课程匿名学生问卷的全部答案。请用中文输出：\n" +
-                "1) 三句话总结整体满意度（含覆盖人数）；\n" +
-                "2) 排名前 5 的优点（要具体）；\n" +
-                "3) 排名前 5 的待改进项（要具体）；\n" +
-                "4) 给授课老师一句可立刻执行的改进建议。\n" +
-                "约束：禁止编造未在数据中出现的内容；禁止透露学生姓名/学号；如果答案数量很少，请直接说明样本不足。\n\n" +
-                "问卷标题：" + (q.getTitle() == null ? "" : q.getTitle()) + "\n" +
-                "问卷题目 (JSON)：\n" + (q.getQuestions() == null ? "" : q.getQuestions()) +
-                "\n\n答案集合（共 " + list.size() + " 份，每条用 ---- 分隔）：\n" + combined;
+        String prompt = "你是面向高校的教学评估专家。下面是某门课程的匿名学生问卷数据。\n" +
+                "请用中文按以下结构输出，注意所有结论都必须能在数据里找到出处：\n\n" +
+                "1) 整体满意度（必写）：用 1~3 句话总结，开头先写明【样本量 N 份】；\n" +
+                "2) 学生认可的优点（最多 3 条，每条引用对应题目编号或答案要点）；\n" +
+                "3) 待改进项（最多 3 条，同样要有出处）；\n" +
+                "4) 给授课老师一条可立刻执行的改进建议。\n\n" +
+                "约束：\n" +
+                "- 即便样本量只有 1~2 份，也必须基于这些数据给出诚实分析，不要拒答、不要只说\"样本不足\"；\n" +
+                "- 评分题（rating）的数值就是 1~5 的整数，请显式说明分数；\n" +
+                "- 禁止编造数据中没有的内容，禁止透露具体学生身份；\n" +
+                "- 如果某题没有任何答案，可在该题下注明\"未作答\"，但不要据此推断整体不可分析。\n\n" +
+                readable;
 
         // 调用 AI；失败/未配置时回退到基于真实数据的本地汇总（绝不返回 RAG 检索结果）
         if (!aiClient.isReady()) {
@@ -202,7 +204,7 @@ public class AssistantServiceImpl implements IAssistantService {
         try {
             List<AiMessage> msgs = new ArrayList<>();
             msgs.add(AiMessage.user(prompt));
-            String systemPrompt = "你是面向高校的教学评估专家，回答必须基于给定数据，禁止编造。";
+            String systemPrompt = "你是面向高校的教学评估专家，回答必须基于给定数据，禁止编造，也不要因样本量小而拒答。";
             String reply = aiClient.chat(systemPrompt, msgs);
             if (StrUtil.isBlank(reply)) {
                 return localQuestionnaireSummary(q, list);
@@ -212,6 +214,87 @@ public class AssistantServiceImpl implements IAssistantService {
             log.warn("summarizeQuestionnaire 调用 AI 失败，回退本地汇总：{}", e.getMessage());
             return localQuestionnaireSummary(q, list);
         }
+    }
+
+    /**
+     * 把问卷题目结构（JSON）与学生答案（JSON）拼成"题目编号 → 答案"配对的可读文本，
+     * 让 LLM 不必再去理解裸 JSON 的字段映射。
+     *
+     * 输出形如：
+     * <pre>
+     * 【问卷标题】XXX
+     * 【题目结构】
+     *   Q1（rating）你对本节课整体满意度？
+     *   Q2（text） 具体反馈？
+     * 【匿名学生答案】共 3 份
+     * 第 1 份：
+     *   Q1: 4
+     *   Q2: 老师讲得好
+     * ----
+     * 第 2 份：...
+     * </pre>
+     */
+    private String buildReadableQuestionnaireData(Questionnaires q, List<QuestionnaireResponses> list) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("【问卷标题】").append(q.getTitle() == null ? "" : q.getTitle()).append('\n');
+
+        com.alibaba.fastjson.JSONArray questions = null;
+        try {
+            questions = com.alibaba.fastjson.JSON.parseArray(q.getQuestions());
+        } catch (Exception ignore) {}
+
+        if (questions != null && !questions.isEmpty()) {
+            sb.append("【题目结构】\n");
+            for (int i = 0; i < questions.size(); i++) {
+                com.alibaba.fastjson.JSONObject qi = questions.getJSONObject(i);
+                if (qi == null) continue;
+                String type = qi.getString("type") == null ? "text" : qi.getString("type");
+                sb.append("  Q").append(i + 1).append("（").append(type).append("） ")
+                        .append(qi.getString("title") == null ? "" : qi.getString("title"))
+                        .append('\n');
+                com.alibaba.fastjson.JSONArray opts = qi.getJSONArray("options");
+                if (opts != null && !opts.isEmpty()) {
+                    sb.append("    可选：");
+                    for (int j = 0; j < opts.size(); j++) {
+                        if (j > 0) sb.append(" / ");
+                        sb.append(opts.getString(j));
+                    }
+                    sb.append('\n');
+                }
+            }
+        }
+
+        sb.append("【匿名学生答案】共 ").append(list.size()).append(" 份。\n");
+        int aidx = 1;
+        for (QuestionnaireResponses r : list) {
+            if (r.getAnswers() == null || r.getAnswers().isEmpty()) continue;
+            if (aidx > 80) break;
+            sb.append("第 ").append(aidx++).append(" 份：\n");
+            try {
+                com.alibaba.fastjson.JSONObject obj = com.alibaba.fastjson.JSON.parseObject(r.getAnswers());
+                if (obj == null) {
+                    sb.append("  (无效答案)\n----\n");
+                    continue;
+                }
+                if (questions != null && !questions.isEmpty()) {
+                    for (int i = 0; i < questions.size(); i++) {
+                        com.alibaba.fastjson.JSONObject qi = questions.getJSONObject(i);
+                        if (qi == null) continue;
+                        String qid = qi.getString("id");
+                        Object v = qid == null ? null : obj.get(qid);
+                        sb.append("  Q").append(i + 1).append(": ")
+                                .append(v == null ? "(未作答)" : String.valueOf(v))
+                                .append('\n');
+                    }
+                } else {
+                    sb.append("  ").append(r.getAnswers()).append('\n');
+                }
+            } catch (Exception ignore) {
+                sb.append("  ").append(r.getAnswers()).append('\n');
+            }
+            sb.append("----\n");
+        }
+        return sb.toString();
     }
 
     /**
