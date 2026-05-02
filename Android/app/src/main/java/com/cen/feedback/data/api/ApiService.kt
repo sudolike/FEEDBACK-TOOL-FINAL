@@ -188,8 +188,15 @@ interface ApiService {
         @Query("teacherId") teacherId: Long? = null
     ): ApiResult<List<Questionnaires>>
 
+    /**
+     * data 字段历史上有两种形态：
+     *  - 新版后端：完整 Questionnaires 对象（含自增 id）
+     *  - 老版后端 / 兼容场景：boolean 表示是否成功
+     * 用 Any 让 Moshi 走通用解析（Map / Boolean / String 等），
+     * Repository.saveQuestionnaire 内部按运行时类型分支处理。
+     */
     @POST("questionnaires/save")
-    suspend fun saveQuestionnaire(@Body q: Questionnaires): ApiResult<Questionnaires>
+    suspend fun saveQuestionnaire(@Body q: Questionnaires): ApiResult<Any>
 
     @POST("questionnaires/delete")
     suspend fun deleteQuestionnaire(@Body q: Questionnaires): ApiResult<Any>

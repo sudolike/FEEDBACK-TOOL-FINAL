@@ -147,7 +147,34 @@ class FeedbackRepository @Inject constructor(
     suspend fun teacherQuestionnaires(teacherId: Long) =
         api.listQuestionnaires(teacherId).unwrap()
 
-    suspend fun saveQuestionnaire(q: Questionnaires): Questionnaires = api.saveQuestionnaire(q).unwrap()
+    /**
+     * 兼容两种后端返回：
+     *  1) 新版：data 是完整 Questionnaires 对象（Moshi 解析为 Map<String,Any?>）
+     *  2) 旧版：data 是 boolean（true=成功）
+     * 旧版返回 boolean 时无法拿到自增 id，调用方应判断 result.id > 0 才做后续绑定。
+     */
+    suspend fun saveQuestionnaire(q: Questionnaires): Questionnaires {
+        val raw = api.saveQuestionnaire(q).unwrap()
+        return when (raw) {
+            is Map<*, *> -> {
+                val m = raw as Map<*, *>
+                Questionnaires(
+                    id = (m["id"] as? Number)?.toLong() ?: 0L,
+                    title = m["title"] as? String,
+                    description = m["description"] as? String,
+                    createdBy = (m["createdBy"] as? Number)?.toLong(),
+                    questions = m["questions"] as? String,
+                    createdAt = m["createdAt"] as? String,
+                    updatedAt = m["updatedAt"] as? String,
+                )
+            }
+            is Boolean -> {
+                if (!raw) throw ApiException(500, "保存失败")
+                q.copy(id = if (q.id > 0L) q.id else 0L)
+            }
+            else -> q.copy(id = if (q.id > 0L) q.id else 0L)
+        }
+    }
 
     suspend fun deleteQuestionnaire(q: Questionnaires) = api.deleteQuestionnaire(q).unwrap()
 
