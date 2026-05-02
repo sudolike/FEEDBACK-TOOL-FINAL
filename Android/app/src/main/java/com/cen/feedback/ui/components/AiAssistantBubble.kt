@@ -363,9 +363,16 @@ private fun MsgBubble(
                         skip = skipTyping,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                     )
-                } else {
+                } else if (isUser) {
                     Text(
                         m.text,
+                        color = fg,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                } else {
+                    MarkdownText(
+                        text = m.text,
                         color = fg,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                         style = MaterialTheme.typography.bodyMedium,

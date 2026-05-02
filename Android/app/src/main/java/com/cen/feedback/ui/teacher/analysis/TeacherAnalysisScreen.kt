@@ -100,8 +100,8 @@ fun TeacherAnalysisScreen(
                                     fontWeight = FontWeight.SemiBold)
                             }
                             Spacer(Modifier.height(8.dp))
-                            Text(
-                                s.summary ?: "暂无总结，待 AI 助手归纳…",
+                            MarkdownText(
+                                text = s.summary ?: "暂无总结，待 AI 助手归纳…",
                                 color = Color.White.copy(alpha = 0.95f),
                                 style = MaterialTheme.typography.bodyMedium,
                             )

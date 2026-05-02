@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.cen.feedback.ui.components.GradientTopBar
+import com.cen.feedback.ui.components.MarkdownText
 import com.cen.feedback.ui.components.TypewriterText
 import com.cen.feedback.ui.student.ai.AiViewModel
 import com.cen.feedback.ui.theme.Primary400
@@ -123,9 +124,17 @@ fun TeacherAssistantScreen(
                                     .widthIn(max = 280.dp),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
-                        } else {
+                        } else if (isUser) {
                             Text(
                                 m.text,
+                                modifier = Modifier
+                                    .padding(12.dp)
+                                    .widthIn(max = 280.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        } else {
+                            MarkdownText(
+                                text = m.text,
                                 modifier = Modifier
                                     .padding(12.dp)
                                     .widthIn(max = 280.dp),

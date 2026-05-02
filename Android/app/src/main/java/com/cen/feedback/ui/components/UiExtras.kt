@@ -358,8 +358,17 @@ fun TypewriterText(
         label = "caret-alpha",
     )
 
+    val rendered = remember(display) { formatMarkdown(display) }
+    val withCaret = remember(rendered, done) {
+        if (done) rendered
+        else androidx.compose.ui.text.buildAnnotatedString {
+            append(rendered)
+            append("▍")
+        }
+    }
+
     Text(
-        text = if (!done) display + "▍" else display,
+        text = withCaret,
         modifier = modifier,
         color = if (color == Color.Unspecified) LocalContentColor.current else color.copy(
             alpha = if (!done) (0.8f + caretAlpha * 0.2f) else 1f
