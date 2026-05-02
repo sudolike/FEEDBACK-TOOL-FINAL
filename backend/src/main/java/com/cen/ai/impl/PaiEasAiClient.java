@@ -94,18 +94,36 @@ public class PaiEasAiClient implements AiClient {
         boolean openai = !"predict".equalsIgnoreCase(mode);
         String url = openai ? toOpenAiUrl(endpoint) : endpoint;
         String body = openai ? buildOpenAiBody(systemPrompt, messages) : buildPredictBody(systemPrompt, messages);
+        int reqLen = body.length();
 
+        long t0 = System.currentTimeMillis();
         // 第一次：Authorization 直接放 token
         HttpResp resp = doPost(url, body, token, false);
         if (resp.code == 401 || resp.code == 403) {
             log.warn("PAI EAS 直接 token 鉴权失败 ({})，尝试 Bearer 前缀重试", resp.code);
             resp = doPost(url, body, token, true);
         }
+        long latency = System.currentTimeMillis() - t0;
         if (resp.code < 200 || resp.code >= 300) {
+            log.error("[PAI-EAS] HTTP {} latency={}ms reqLen={} respLen={} resp[:600]={}",
+                    resp.code, latency, reqLen, resp.body == null ? 0 : resp.body.length(),
+                    safeBody(resp.body, 600));
             throw new AiCallException("PAI EAS HTTP " + resp.code + ": " + safeBody(resp.body));
         }
 
-        return openai ? parseOpenAiReply(resp.body) : parsePredictReply(resp.body);
+        String reply = openai ? parseOpenAiReply(resp.body) : parsePredictReply(resp.body);
+        int respLen = resp.body == null ? 0 : resp.body.length();
+        if (reply == null || reply.trim().isEmpty()) {
+            // 关键诊断：HTTP 200 但 reply 为空 —— 几乎肯定是模型对 prompt 没生成内容
+            // （prompt 太长 / 模型上下文不够 / 触发安全策略）。把 raw body 完整打出来，
+            // 否则上层只能猜。
+            log.warn("[PAI-EAS] empty reply but HTTP 200. latency={}ms reqLen={} respLen={} raw[:1500]={}",
+                    latency, reqLen, respLen, safeBody(resp.body, 1500));
+        } else {
+            log.info("[PAI-EAS] ok latency={}ms reqLen={} respLen={} replyLen={}",
+                    latency, reqLen, respLen, reply.length());
+        }
+        return reply;
     }
 
     @Override

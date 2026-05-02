@@ -72,8 +72,31 @@ public class AssistantServiceImpl implements IAssistantService {
             }
         }
 
+        // 教师场景的 query routing：
+        // 当老师在通用 AI 助手里问"问卷反馈/学生评价/总结改进"等意图时，
+        // 自动注入这位老师近期课程的真实问卷答案与课程评价，避免 LLM 凭空作答。
+        // 包一层 try 兜底：即便 routing 内部数据访问异常，也不能让整个 /assistant/chat 500。
+        String teacherCtx = null;
+        boolean isTeacherFeedbackQuery = false;
+        try {
+            isTeacherFeedbackQuery =
+                    req != null
+                    && "teacher".equalsIgnoreCase(req.getRole())
+                    && req.getUserId() != null
+                    && req.getMessage() != null
+                    && isTeacherFeedbackIntent(req.getMessage());
+            teacherCtx = buildTeacherFeedbackContext(req);
+        } catch (Exception e) {
+            log.warn("buildTeacherFeedbackContext 失败，跳过教师反馈注入：{}", e.getMessage());
+        }
+
         StringBuilder userMsg = new StringBuilder();
-        if (!citations.isEmpty()) {
+        // RAG citations 仅在「不是教师反馈意图」或「真实数据缺失」时注入；
+        // 否则 sys_kb_chunk 里的 teacher_rating 自动索引会污染 prompt
+        // （比如出现 "授课能力: 待确认 (总评分: null/5)" 这种与问卷反馈无关的噪声），
+        // 严重时小模型会直接生成空 content 或离题回答。
+        boolean injectRag = !(isTeacherFeedbackQuery && teacherCtx != null);
+        if (injectRag && !citations.isEmpty()) {
             userMsg.append("【可参考的内部资料】\n");
             int idx = 1;
             for (KbChunk c : citations) {
@@ -84,16 +107,6 @@ public class AssistantServiceImpl implements IAssistantService {
             userMsg.append("【说明】请优先依据上述资料作答，未涵盖时再用通识回答；引用资料时使用 [编号]。\n\n");
         }
 
-        // 教师场景的 query routing：
-        // 当老师在通用 AI 助手里问"问卷反馈/学生评价/总结改进"等意图时，
-        // 自动注入这位老师近期课程的真实问卷答案与课程评价，避免 LLM 凭空作答。
-        // 包一层 try 兜底：即便 routing 内部数据访问异常，也不能让整个 /assistant/chat 500。
-        String teacherCtx = null;
-        try {
-            teacherCtx = buildTeacherFeedbackContext(req);
-        } catch (Exception e) {
-            log.warn("buildTeacherFeedbackContext 失败，跳过教师反馈注入：{}", e.getMessage());
-        }
         if (teacherCtx != null) {
             userMsg.append(teacherCtx);
         }
@@ -107,28 +120,29 @@ public class AssistantServiceImpl implements IAssistantService {
         // demo fallback 仅在用户提问明确指向 HKU 示例课程时才触发，避免任意提问被 demo 截胡。
         String demoFallbackReply = buildDemoFallbackReply(req.getMessage(), citations);
         String genericFallback = buildGenericFallbackReply(citations);
+        // 教师"问卷/反馈/改进"意图下的本地数据兜底：
+        // 即使 AI 失败或返回空，也要给老师一份基于真实问卷答案的汇总，
+        // 绝不返回 RAG 检索的"教师评分自动索引/课程描述"等无关内容。
+        String teacherLocalFallback = isTeacherFeedbackQuery
+                ? buildLocalTeacherFeedbackSummary(req)
+                : null;
         if (!aiClient.isReady()) {
-            reply = demoFallbackReply != null
-                    ? demoFallbackReply
-                    : (genericFallback != null
-                        ? genericFallback
-                        : "AI 服务暂不可用，请联系管理员配置 AI provider 后重试。");
+            reply = pickFallback(teacherLocalFallback, demoFallbackReply, genericFallback,
+                    "AI 服务暂不可用，请联系管理员配置 AI provider 后重试。");
         } else {
             try {
                 reply = aiClient.chat(systemPrompt, messages);
                 if (StrUtil.isBlank(reply)) {
-                    reply = genericFallback != null
-                            ? genericFallback
-                            : (demoFallbackReply != null ? demoFallbackReply : "AI 服务暂不可用，请稍后再试。");
+                    log.warn("AI 返回空回复 (provider={}, role={}, courseId={}, msgLen={}), 走本地兜底",
+                            aiClient.providerName(), req.getRole(), req.getCourseId(),
+                            req.getMessage() == null ? 0 : req.getMessage().length());
+                    reply = pickFallback(teacherLocalFallback, demoFallbackReply, genericFallback,
+                            "AI 服务暂不可用，请稍后再试。");
                 }
             } catch (Exception e) {
                 log.error("AI 调用失败 (provider={})", aiClient.providerName(), e);
-                // 调用失败时优先给"基于检索资料"的通用兜底，最后才考虑 demo 文案
-                reply = genericFallback != null
-                        ? genericFallback
-                        : (demoFallbackReply != null
-                            ? demoFallbackReply
-                            : "AI 服务暂不可用，请稍后再试。错误信息：" + e.getMessage());
+                reply = pickFallback(teacherLocalFallback, demoFallbackReply, genericFallback,
+                        "AI 服务暂不可用，请稍后再试。错误信息：" + e.getMessage());
             }
         }
 
@@ -506,11 +520,29 @@ public class AssistantServiceImpl implements IAssistantService {
      * 否则返回 null（保留通用 RAG 流程）。
      */
     private String buildTeacherFeedbackContext(ChatRequestDTO req) {
-        if (req == null || !"teacher".equalsIgnoreCase(req.getRole())) return null;
-        if (req.getUserId() == null) return null;
+        log.info("[teacherCtx] entry role={} userId={} courseId={} msgLen={}",
+                req == null ? null : req.getRole(),
+                req == null ? null : req.getUserId(),
+                req == null ? null : req.getCourseId(),
+                req == null || req.getMessage() == null ? 0 : req.getMessage().length());
+        if (req == null || !"teacher".equalsIgnoreCase(req.getRole())) {
+            log.info("[teacherCtx] skip: not teacher role (role={})", req == null ? null : req.getRole());
+            return null;
+        }
+        if (req.getUserId() == null) {
+            log.info("[teacherCtx] skip: no userId");
+            return null;
+        }
         String msg = req.getMessage();
-        if (StrUtil.isBlank(msg)) return null;
-        if (!isTeacherFeedbackIntent(msg)) return null;
+        if (StrUtil.isBlank(msg)) {
+            log.info("[teacherCtx] skip: blank msg");
+            return null;
+        }
+        if (!isTeacherFeedbackIntent(msg)) {
+            log.info("[teacherCtx] skip: not feedback intent (msg head={})",
+                    msg.length() > 60 ? msg.substring(0, 60) : msg);
+            return null;
+        }
 
         // 选课范围：优先 req.courseId；否则取该教师所授课程（最多 MAX_COURSES_FOR_TEACHER 门）
         List<Courses> courses = new ArrayList<>();
@@ -525,7 +557,11 @@ public class AssistantServiceImpl implements IAssistantService {
                     .last("LIMIT " + MAX_COURSES_FOR_TEACHER);
             courses = coursesMapper.selectList(cq);
         }
-        if (courses.isEmpty()) return null;
+        if (courses.isEmpty()) {
+            log.info("[teacherCtx] userId={} courseId={} no courses found", req.getUserId(), req.getCourseId());
+            return null;
+        }
+        log.info("[teacherCtx] userId={} matched {} courses", req.getUserId(), courses.size());
 
         StringBuilder sb = new StringBuilder();
         sb.append("【教师内部数据：你授课课程的近期反馈与问卷答案】\n");
@@ -585,9 +621,121 @@ public class AssistantServiceImpl implements IAssistantService {
             sb.append('\n');
         }
 
-        if (!anyData) return null;
+        if (!anyData) {
+            log.info("[teacherCtx] userId={} no feedback/responses across {} courses",
+                    req.getUserId(), courses.size());
+            return null;
+        }
+        log.info("[teacherCtx] userId={} ctxLen={} (data injected)", req.getUserId(), sb.length());
         sb.append("【任务】请基于以上真实数据回答用户的问题，不要编造未在数据中出现的内容。\n\n");
         return sb.toString();
+    }
+
+    /**
+     * 教师"问卷反馈/学生评价"意图下，AI 不可用时给的真实数据本地汇总。
+     * 复用 buildTeacherFeedbackContext 已经走通的查询路径，但输出格式偏向
+     * "教师阅读友好"（带评分均值、典型评论摘录），而不是 prompt 拼接格式。
+     * 关键：绝不引入 RAG citations，避免出现 teacher_rating 索引这种噪声。
+     */
+    private String buildLocalTeacherFeedbackSummary(ChatRequestDTO req) {
+        if (req == null || req.getUserId() == null) return null;
+
+        List<Courses> courses = new ArrayList<>();
+        if (req.getCourseId() != null) {
+            Courses single = coursesMapper.selectById(req.getCourseId());
+            if (single != null && req.getUserId().equals(single.getTeacherId())) {
+                courses.add(single);
+            }
+        } else {
+            QueryWrapper<Courses> cq = new QueryWrapper<>();
+            cq.eq("teacher_id", req.getUserId()).orderByDesc("id")
+                    .last("LIMIT " + MAX_COURSES_FOR_TEACHER);
+            courses = coursesMapper.selectList(cq);
+        }
+        if (courses == null || courses.isEmpty()) return null;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("（在线 AI 暂时不可用，以下基于您课程的真实问卷与学生评价做本地汇总）\n\n");
+
+        boolean anyData = false;
+        for (Courses c : courses) {
+            StringBuilder block = new StringBuilder();
+            block.append("**课程：").append(safe(c.getName())).append("**\n");
+
+            // 1) 课程文字评价
+            QueryWrapper<CourseFeedback> fq = new QueryWrapper<>();
+            fq.eq("course_id", c.getId()).orderByDesc("id")
+                    .last("LIMIT " + FEEDBACK_LIMIT_PER_COURSE);
+            List<CourseFeedback> fbs = courseFeedbackMapper.selectList(fq);
+            boolean blockHas = false;
+            if (fbs != null && !fbs.isEmpty()) {
+                blockHas = true;
+                double avg = fbs.stream().filter(f -> f.getRating() != null)
+                        .mapToInt(CourseFeedback::getRating).average().orElse(0);
+                long ratedCnt = fbs.stream().filter(f -> f.getRating() != null).count();
+                block.append("- 课程评价共 ").append(fbs.size()).append(" 条");
+                if (ratedCnt > 0) {
+                    block.append("，平均评分 ").append(String.format(Locale.ROOT, "%.2f", avg))
+                            .append(" / 5（").append(ratedCnt).append(" 条带评分）");
+                }
+                block.append("\n");
+                int kept = 0;
+                for (CourseFeedback f : fbs) {
+                    String content = safe(f.getContent()).trim();
+                    if (content.isEmpty()) continue;
+                    if (kept++ >= 5) break;
+                    if (content.length() > 140) content = content.substring(0, 140) + "...";
+                    block.append("  · ");
+                    if (f.getRating() != null) block.append("[").append(f.getRating()).append("★] ");
+                    block.append(content).append('\n');
+                }
+            }
+
+            // 2) 该课程下问卷答案
+            QueryWrapper<CourseQuestionnaire> cqq = new QueryWrapper<>();
+            cqq.eq("course_id", c.getId()).orderByDesc("id").last("LIMIT 3");
+            List<CourseQuestionnaire> binds = courseQuestionnaireMapper.selectList(cqq);
+            for (CourseQuestionnaire bind : binds) {
+                if (bind.getQuestionnaireId() == null) continue;
+                Questionnaires q = questionnairesMapper.selectById(bind.getQuestionnaireId());
+                if (q == null) continue;
+                QueryWrapper<QuestionnaireResponses> rq = new QueryWrapper<>();
+                rq.eq("course_id", c.getId()).eq("questionnaire_id", q.getId())
+                        .orderByDesc("id").last("LIMIT " + RESPONSE_LIMIT_PER_QUEST);
+                List<QuestionnaireResponses> resps = questionnaireResponsesMapper.selectList(rq);
+                if (resps == null || resps.isEmpty()) continue;
+                blockHas = true;
+
+                // 用 localQuestionnaireSummary 复用已有的题目级聚合逻辑，
+                // 但去掉"AI 不可用"那行开头，避免重复抬头。
+                String per = localQuestionnaireSummary(q, resps);
+                int cut = per.indexOf("\n\n");
+                if (cut > 0) per = per.substring(cut + 2);
+                block.append("- 问卷《").append(safe(q.getTitle())).append("》：")
+                        .append(resps.size()).append(" 份匿名回答\n");
+                for (String line : per.split("\n")) {
+                    if (line.trim().isEmpty()) continue;
+                    block.append("  ").append(line).append('\n');
+                }
+            }
+
+            if (blockHas) {
+                sb.append(block).append('\n');
+                anyData = true;
+            }
+        }
+
+        if (!anyData) return null;
+        sb.append("---\n");
+        sb.append("**改进建议**：建议结合上述评分分布与文字评价，针对集中提及的问题（如内容深度、节奏、作业难度等）做下一轮迭代；如希望由 AI 生成更精炼的归纳，请稍后再试。");
+        return sb.toString();
+    }
+
+    private String pickFallback(String... candidates) {
+        for (String c : candidates) {
+            if (c != null && !c.trim().isEmpty()) return c;
+        }
+        return "AI 服务暂不可用，请稍后再试。";
     }
 
     private boolean isTeacherFeedbackIntent(String msg) {
