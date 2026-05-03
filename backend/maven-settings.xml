@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Docker 构建专用 Maven settings.xml。
+  - 在 builder 阶段强制把所有依赖（包括 plugins 与 spring-boot-starter-parent
+    本身解析过程中走的 central）都通过阿里云国内镜像下载，避免跨境拉取慢。
+  - 任何 mirror 都不可达时，maven 仍会回退到 Maven Central（!central 排除写法
+    会让 mirror 不接管 central；这里我们要的是国内加速，所以不排除）。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+    <mirrors>
+        <mirror>
+            <id>aliyunmaven</id>
+            <name>Aliyun Public Mirror</name>
+            <url>https://maven.aliyun.com/repository/public/</url>
+            <mirrorOf>central</mirrorOf>
+        </mirror>
+        <mirror>
+            <id>aliyunmaven-spring</id>
+            <name>Aliyun Spring Mirror</name>
+            <url>https://maven.aliyun.com/repository/spring/</url>
+            <mirrorOf>spring-milestones,spring-snapshots</mirrorOf>
+        </mirror>
+    </mirrors>
+
+</settings>

@@ -19,6 +19,15 @@ backend/target/
 
 ### Deploy secrets ###
 deploy/.env
+deploy/recent*.log
+deploy/app_inside.jar
+
+### Python (seed scripts cache) ###
+__pycache__/
+*.pyc
+
+### Demo helpers ###
+.tmp_video_frames/
 
 ### OS ###
 .DS_Store

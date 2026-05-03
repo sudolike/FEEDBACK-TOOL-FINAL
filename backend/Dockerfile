@@ -3,15 +3,22 @@
 # =========================================================
 
 # ---------- Stage 1: build ----------
+# syntax=docker/dockerfile:1.4
 FROM maven:3.8.7-eclipse-temurin-8 AS builder
 WORKDIR /workspace
 
-# 先拷贝 pom，预下载依赖以利用缓存
+# 把国内镜像 settings.xml 放到 maven 默认配置位置，强制走阿里云
+COPY maven-settings.xml /root/.m2/settings.xml
+
+# 先拷贝 pom，预下载依赖以利用层缓存 + BuildKit 持久化 ~/.m2 缓存
+# 去掉 -q：保留进度输出，避免长时间下载看似"卡死"
 COPY pom.xml .
-RUN mvn -B -q dependency:go-offline -DskipTests
+RUN --mount=type=cache,target=/root/.m2/repository \
+    mvn -B dependency:go-offline -DskipTests
 
 COPY src ./src
-RUN mvn -B -q -DskipTests clean package
+RUN --mount=type=cache,target=/root/.m2/repository \
+    mvn -B -DskipTests clean package
 
 # ---------- Stage 2: runtime ----------
 FROM eclipse-temurin:8-jre-jammy
